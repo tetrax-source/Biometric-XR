@@ -147,4 +147,13 @@ This document tracks all changes made during the system upgrade. Each phase reco
 - **What to Test**:
   - Run `python -c "import vosk, config; m = vosk.Model(config.VOSK_MODEL_PATH); print('OK')"` to verify model loads.
 
+## Phase 2 (New Upgrade): Face-Only Enrollment Transition
+- **Status**: DONE
+- **Files Changed**:
+  - `app_web.py`: Removed voice-recording call from `/api/enroll` endpoint. Enrollment now captures 5 FaceNet embeddings from camera and updates enrolled cache without requiring voice.
+  - `app_gui.py`: Removed Voice Profile Enrollment card from the Enrollment UI; enrollment now executes face-only capture. Kept existing voice functions and existing database rows untouched.
+  - `templates/index.html`: Updated enrollment UI labels and status alerts to indicate face-only capture.
+- **What to Test**:
+  - Test enrolling a new user via web API or GUI; verify only face samples are captured and stored, with no prompt or requirement for voice.
+
 ---

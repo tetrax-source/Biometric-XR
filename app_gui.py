@@ -456,10 +456,10 @@ class BiometricAttendanceApp(ctk.CTk):
         self.entry_enroll_name = ctk.CTkEntry(left, placeholder_text="e.g. ASWIN", height=40, font=ctk.CTkFont(size=14))
         self.entry_enroll_name.pack(fill="x", pady=(0, 20))
 
-        # Face enrollment card
+        # Face enrollment card (Face-Only enrollment)
         f_card = ctk.CTkFrame(left)
         f_card.pack(fill="x", pady=10)
-        ctk.CTkLabel(f_card, text="1. Face Profile Capture", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
+        ctk.CTkLabel(f_card, text="Face Profile Capture (5 Samples)", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
         self.lbl_face_enroll_status = ctk.CTkLabel(f_card, text="0 / 5 Face samples captured", text_color="gray")
         self.lbl_face_enroll_status.pack(anchor="w", padx=15, pady=(0, 10))
 
@@ -467,18 +467,6 @@ class BiometricAttendanceApp(ctk.CTk):
             f_card, text="📸 Capture Face Samples", command=self.capture_face_samples_interactive, height=35
         )
         self.btn_capture_face.pack(fill="x", padx=15, pady=(0, 15))
-
-        # Voice enrollment card
-        v_card = ctk.CTkFrame(left)
-        v_card.pack(fill="x", pady=10)
-        ctk.CTkLabel(v_card, text="2. Voice Profile Enrollment", font=ctk.CTkFont(weight="bold")).pack(anchor="w", padx=15, pady=(10, 5))
-        self.lbl_voice_enroll_status = ctk.CTkLabel(v_card, text="0 / 3 Voice samples recorded", text_color="gray")
-        self.lbl_voice_enroll_status.pack(anchor="w", padx=15, pady=(0, 10))
-
-        self.btn_record_voice_enroll = ctk.CTkButton(
-            v_card, text="🎤 Record Voice Sample", command=self.record_voice_samples_interactive, height=35
-        )
-        self.btn_record_voice_enroll.pack(fill="x", padx=15, pady=(0, 15))
 
         # Enrolled Users List (Right)
         right = ctk.CTkFrame(content)

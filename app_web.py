@@ -374,15 +374,6 @@ def api_enroll():
     if captured_faces == 0:
         return jsonify({"success": False, "error": "No face detected in camera during enrollment."})
 
-    # Record voice sample
-    try:
-        audio = voice_engine.record_audio(duration=3.0)
-        mfcc = voice_engine.extract_mfcc_embedding(audio)
-        if mfcc is not None:
-            save_voice_embedding(name, mfcc)
-    except Exception as e:
-        pass
-
     reload_enrolled()
     actor = session['user']['username']
     log_audit(actor, "ENROLL_USER", f"Enrolled student '{name}' with {captured_faces} face templates.")

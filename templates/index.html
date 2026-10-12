@@ -199,7 +199,7 @@
                     <div class="card p-4 shadow-sm">
                         <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-plus text-primary me-2"></i>Enroll New Student</h5>
                         <p class="text-secondary small">
-                            Position the student in front of the camera, enter their name, and click Enroll. The system captures 5 FaceNet embeddings and an acoustic voice profile.
+                            Position the student in front of the camera, enter their name, and click Enroll. The system captures 5 FaceNet face embeddings directly from the camera.
                         </p>
                         <div class="mb-3">
                             <label class="form-label fw-semibold">Student Name / Roll ID</label>
@@ -498,7 +498,7 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enrolling...';
         alertBox.classList.remove('d-none');
         alertBox.className = 'alert alert-info mt-3 text-center';
-        alertBox.innerText = 'Capturing face images and recording voice sample...';
+        alertBox.innerText = 'Capturing face samples from camera...';
 
         try {
             const res = await fetch('/api/enroll', {
