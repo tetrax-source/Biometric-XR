@@ -11,7 +11,10 @@ import os
 import pandas as pd
 import numpy as np
 
-DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "attendance_system.db")
+try:
+    from config import DB_PATH as DB_FILE
+except ImportError:
+    DB_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "attendance_system.db")
 
 def get_connection():
     conn = sqlite3.connect(DB_FILE)

@@ -6,6 +6,7 @@ import datetime
 from liveness import check_blink
 from face_verify import recognize_face
 from voice_verify import verify_user
+from config import CAMERA_INDEX, EAR_THRESHOLD, REQUIRED_BLINKS
 
 def mark_attendance(name, face_conf=0.0, voice_score=0.0):
     from core.database import record_attendance as db_record

@@ -28,13 +28,19 @@ from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
 from core.voice_engine import VoiceEngine
 
+from config import (
+    CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
+    EAR_THRESHOLD, REQUIRED_BLINKS, SECRET_KEY
+)
+
 app = Flask(__name__)
+app.secret_key = SECRET_KEY
 
 # Initialize DB & Biometric Engines
 init_db()
-liveness_detector = LivenessDetector(ear_threshold=0.22, required_blinks=1)
-face_engine = FaceEngine(threshold=0.55)
-voice_engine = VoiceEngine(threshold=0.50)
+liveness_detector = LivenessDetector(ear_threshold=EAR_THRESHOLD, required_blinks=REQUIRED_BLINKS)
+face_engine = FaceEngine(threshold=FACE_THRESHOLD)
+voice_engine = VoiceEngine(threshold=VOICE_THRESHOLD)
 
 # State management
 camera_lock = threading.Lock()
@@ -58,7 +64,7 @@ state = {
 def get_camera():
     global camera
     if camera is None or not camera.isOpened():
-        camera = cv2.VideoCapture(0)
+        camera = cv2.VideoCapture(CAMERA_INDEX)
     return camera
 
 def reset_state():

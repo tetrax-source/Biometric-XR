@@ -35,6 +35,10 @@ from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
 from core.voice_engine import VoiceEngine
 from core.migration import migrate_legacy_data
+from config import (
+    CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
+    EAR_THRESHOLD, REQUIRED_BLINKS
+)
 
 # Appearance
 ctk.set_appearance_mode("Dark")
@@ -49,14 +53,14 @@ class BiometricAttendanceApp(ctk.CTk):
         self.minsize(1050, 700)
 
         # Initialize engines
-        self.liveness_detector = LivenessDetector(ear_threshold=0.22, required_blinks=1)
-        self.face_engine = FaceEngine(threshold=0.55)
-        self.voice_engine = VoiceEngine(threshold=0.50)
+        self.liveness_detector = LivenessDetector(ear_threshold=EAR_THRESHOLD, required_blinks=REQUIRED_BLINKS)
+        self.face_engine = FaceEngine(threshold=FACE_THRESHOLD)
+        self.voice_engine = VoiceEngine(threshold=VOICE_THRESHOLD)
 
         # App state
         self.cap = None
         self.is_camera_running = False
-        self.camera_index = 0
+        self.camera_index = CAMERA_INDEX
         self.verification_step = 1  # 1: Liveness, 2: Face, 3: Voice, 4: Done
         self.verified_user = None
         self.verified_face_conf = 0.0
