@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BioSecure - AI Multi-Modal Biometric Attendance System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            min-height: 100vh;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+        }
+        .video-box-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            border-radius: 10px;
+            overflow: hidden;
+            background: #000;
+            border: 2px solid #334155;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            aspect-ratio: 4/3;
+        }
+        .video-box {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* mirror selfie view */
+        }
+        .face-overlay {
+            position: absolute;
+            top: 20%;
+            left: 28%;
+            width: 44%;
+            height: 52%;
+            border: 2px dashed rgba(56, 189, 248, 0.7);
+            border-radius: 12px;
+            pointer-events: none;
+            transition: all 0.3s ease;
+        }
+        .face-overlay.detected {
+            border: 2px solid #22c55e;
+            box-shadow: 0 0 15px rgba(34, 197, 94, 0.4);
+        }
+        .face-tag {
+            position: absolute;
+            top: -26px;
+            left: 0;
+            background: rgba(34, 197, 94, 0.9);
+            color: #fff;
+            padding: 2px 8px;
+            font-size: 0.75rem;
+            font-weight: bold;
+            border-radius: 4px;
+            display: none;
+        }
+        .step-badge {
+            font-size: 0.95rem;
+            padding: 8px 14px;
+            border-radius: 8px;
+        }
+        .challenge-code {
+            font-family: monospace;
+            font-size: 1.6rem;
+            letter-spacing: 4px;
+            font-weight: bold;
+            color: #38bdf8;
+            background: #0f172a;
+            padding: 6px 14px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-expand-lg border-bottom border-secondary mb-4" style="background-color: #1e293b;">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold text-primary" href="#">
+            <i class="fa-solid fa-shield-halved me-2"></i>BIO-SECURE 
+            <span class="badge bg-danger ms-1 fs-6" id="navRoleBadge"><i class="fa-solid fa-user-gear me-1"></i>Administrator Portal</span>
+        </a>
+        <div class="d-flex align-items-center">
+            <span class="text-secondary small me-3" id="clockText"></span>
+            
+            <div class="dropdown me-2">
+                <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" id="userMenuBtn">
+                    <i class="fa-solid fa-user-circle me-1"></i><span id="currentUserName">kathir (Admin)</span>
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+                    <li><button class="dropdown-item" onclick="switchRole('admin')"><i class="fa-solid fa-user-gear me-2"></i>Admin View</button></li>
+                    <li><button class="dropdown-item" onclick="switchRole('teacher')"><i class="fa-solid fa-chalkboard-user me-2"></i>Teacher View</button></li>
+                    <li><button class="dropdown-item" onclick="switchRole('kiosk')"><i class="fa-solid fa-desktop me-2"></i>Public Kiosk View</button></li>
+                </ul>
+            </div>
+
+            <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
+                <i class="fa-solid fa-circle-dot me-1"></i> Online Demo
+            </span>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 pb-5">
+    <!-- Top Nav Tabs -->
+    <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
+        <li class="nav-item" role="presentation" id="tabVerifyNavItem">
+            <button class="nav-link active px-4" id="tab-verify-btn" data-bs-toggle="pill" data-bs-target="#tab-verify" type="button">
+                <i class="fa-solid fa-camera me-2"></i><span id="tabVerifyLabel">Student Check-In</span>
+            </button>
+        </li>
+        <li class="nav-item" role="presentation" id="tabEnrollNavItem">
+            <button class="nav-link px-4" id="tab-enroll-btn" data-bs-toggle="pill" data-bs-target="#tab-enroll" type="button">
+                <i class="fa-solid fa-user-plus me-2"></i>Enroll Student
+            </button>
+        </li>
+        <li class="nav-item" role="presentation" id="tabLogsNavItem">
+            <button class="nav-link px-4" id="tab-logs-btn" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button">
+                <i class="fa-solid fa-clipboard-list me-2"></i>Attendance Records
+            </button>
+        </li>
+        <li class="nav-item" role="presentation" id="tabAdminNavItem">
+            <button class="nav-link px-4" id="tab-admin-btn" data-bs-toggle="pill" data-bs-target="#tab-admin" type="button">
+                <i class="fa-solid fa-user-shield me-2"></i>Faculty Management
+            </button>
+        </li>
+        <li class="nav-item" role="presentation" id="tabAuditNavItem">
+            <button class="nav-link px-4" id="tab-audit-btn" data-bs-toggle="pill" data-bs-target="#tab-audit" type="button">
+                <i class="fa-solid fa-clock-rotate-left me-2"></i>Security Audit Logs
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="pills-tabContent">
+        <!-- TAB 1: KIOSK LIVE VERIFICATION (PUBLIC / PREVIEW) -->
+        <div class="tab-pane fade show active" id="tab-verify" role="tabpanel">
+            <div class="row g-4">
+                <!-- Video Monitor Column -->
+                <div class="col-lg-7 text-center">
+                    <div class="card p-3 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+                            <h5 class="m-0 fw-semibold"><i class="fa-solid fa-video text-primary me-2"></i>Webcam Live Stream</h5>
+                            <div>
+                                <button class="btn btn-outline-info btn-sm me-1" id="btnToggleCam" onclick="toggleWebcam()">
+                                    <i class="fa-solid fa-camera me-1"></i>Start Camera
+                                </button>
+                                <button class="btn btn-outline-secondary btn-sm" onclick="resetPipeline()">
+                                    <i class="fa-solid fa-rotate me-1"></i>Reset Pipeline
+                                </button>
+                            </div>
+                        </div>
+                        <div class="video-box-container my-2">
+                            <video id="webcamVideo" class="video-box" autoplay playsinline muted></video>
+                            <canvas id="cameraCanvas" style="display:none;"></canvas>
+                            <div class="face-overlay" id="faceOverlay">
+                                <span class="face-tag" id="faceTag">KATHIR (88.4%)</span>
+                            </div>
+                        </div>
+                        <div class="text-secondary small mt-2">
+                            <i class="fa-solid fa-info-circle me-1"></i> Look into the camera and blink naturally to activate facial verification.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Status Cards -->
+                <div class="col-lg-5">
+                    <div class="card p-4 shadow-sm h-100">
+                        <h5 class="fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa-solid fa-list-check text-info me-2"></i>Multi-Modal Verification
+                        </h5>
+
+                        <!-- Step 1: Liveness -->
+                        <div class="card mb-3 p-3 bg-dark border-secondary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold"><i class="fa-solid fa-eye me-2 text-warning"></i>Step 1: Blink Liveness</div>
+                                    <div class="text-secondary small mt-1" id="earStatus">Tracking EAR & eye blinks...</div>
+                                </div>
+                                <span class="badge bg-secondary step-badge" id="badgeStep1">Waiting</span>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Face Recognition -->
+                        <div class="card mb-3 p-3 bg-dark border-secondary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold"><i class="fa-solid fa-id-card me-2 text-info"></i>Step 2: Face Recognition</div>
+                                    <div class="text-secondary small mt-1" id="faceStatus">Locked (Requires Step 1)</div>
+                                </div>
+                                <span class="badge bg-secondary step-badge" id="badgeStep2">Locked</span>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Spoken 4-Digit Challenge -->
+                        <div class="card mb-3 p-3 bg-dark border-secondary">
+                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Spoken 4-Digit Challenge</div>
+                            <div class="text-secondary small mb-2" id="voiceStatus">Locked (Requires Step 2)</div>
+                            <div id="voiceSection" class="d-none">
+                                <div class="mb-2 text-center">
+                                    <span class="text-muted small d-block mb-1">Speak this random 4-digit code:</span>
+                                    <span class="challenge-code" id="challengeCode">----</span>
+                                </div>
+                                <div class="alert alert-dark border-secondary py-2 px-3 small text-center mb-2" id="heardBox">
+                                    <span>Digits Heard: </span><strong class="text-info fs-6" id="heardDigits">Waiting for voice...</strong>
+                                </div>
+                                <div class="text-center small text-secondary mb-2" id="attemptText">
+                                    Attempt 1 of 3 (Single-use, expires in 60s)
+                                </div>
+                                <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
+                                    <i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Result Banner -->
+                        <div class="alert alert-secondary mt-auto text-center fw-semibold py-3 m-0" id="resultBanner">
+                            <i class="fa-solid fa-hourglass-start me-2"></i>System Ready
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: STUDENT ENROLLMENT (TEACHER & ADMIN) -->
+        <div class="tab-pane fade" id="tab-enroll" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-lg-6">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-plus text-primary me-2"></i>Enroll New Student</h5>
+                        <p class="text-secondary small">
+                            Position the student in front of the camera, enter their name, and click Enroll. The system captures 5 FaceNet face embeddings directly from the camera.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Student Name / Roll ID</label>
+                            <input type="text" class="form-control form-control-lg bg-dark text-white border-secondary" id="enrollName" placeholder="e.g. ASWIN">
+                        </div>
+                        <button class="btn btn-success btn-lg w-100 fw-bold" id="btnEnroll" onclick="enrollUser()">
+                            <i class="fa-solid fa-cloud-arrow-up me-2"></i>Capture & Save Enrollment
+                        </button>
+                        <div class="alert alert-info mt-3 d-none text-center" id="enrollAlert"></div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-users text-info me-2"></i>Enrolled Students</h5>
+                        <div class="table-responsive" style="max-height: 380px;">
+                            <table class="table table-dark table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Enrolled Date</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="enrolledUsersBody">
+                                    <!-- Injected by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ATTENDANCE RECORDS (TEACHER & ADMIN) -->
+        <div class="tab-pane fade" id="tab-logs" role="tabpanel">
+            <div class="card p-4 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0"><i class="fa-solid fa-table text-info me-2"></i>Attendance Records</h5>
+                    <div>
+                        <button class="btn btn-outline-success me-2" onclick="exportLogsCSV()">
+                            <i class="fa-solid fa-file-csv me-1"></i>Download CSV Report
+                        </button>
+                        <button class="btn btn-outline-primary" onclick="renderLogs()">
+                            <i class="fa-solid fa-rotate me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover table-striped align-middle">
+                        <thead>
+                            <tr class="table-primary text-white">
+                                <th>Name</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Verification Method</th>
+                                <th>Face Conf</th>
+                                <th>Spoken Digits</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 4: FACULTY MANAGEMENT (ADMIN) -->
+        <div class="tab-pane fade" id="tab-admin" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-md-5">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-tie text-warning me-2"></i>Create Faculty Account</h5>
+                        <div class="mb-3">
+                            <label class="form-label small">Username</label>
+                            <input type="text" class="form-control bg-dark border-secondary text-white" id="teacherUsername" placeholder="e.g. teacher_maths">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">Password</label>
+                            <input type="password" class="form-control bg-dark border-secondary text-white" id="teacherPassword" placeholder="Minimum 6 characters">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">Role</label>
+                            <select class="form-select bg-dark border-secondary text-white" id="teacherRole">
+                                <option value="teacher" selected>Teacher</option>
+                                <option value="admin">Administrator</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-warning w-100 fw-semibold" onclick="createTeacher()">
+                            <i class="fa-solid fa-plus me-1"></i>Create Account
+                        </button>
+                        <div class="alert alert-info mt-3 d-none text-center" id="teacherAlert"></div>
+                    </div>
+                </div>
+
+                <div class="col-md-7">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-id-badge text-primary me-2"></i>System Faculty Accounts</h5>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Created Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teachersTableBody">
+                                    <!-- Injected by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: AUDIT LOGS (ADMIN) -->
+        <div class="tab-pane fade" id="tab-audit" role="tabpanel">
+            <div class="card p-4 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0"><i class="fa-solid fa-shield-virus text-danger me-2"></i>Security Audit Trail</h5>
+                    <button class="btn btn-outline-primary btn-sm" onclick="renderAuditLogs()">
+                        <i class="fa-solid fa-rotate me-1"></i>Refresh Trail
+                    </button>
+                </div>
+                <div class="table-responsive" style="max-height: 480px;">
+                    <table class="table table-dark table-sm table-striped align-middle">
+                        <thead>
+                            <tr class="table-secondary text-dark">
+                                <th>Timestamp</th>
+                                <th>Actor</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <!-- Injected by JS -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // State management for interactive client-side demo
+    let state = {
+        step: 1,
+        ear: 0.28,
+        blinkCount: 0,
+        livenessPassed: false,
+        userName: "KATHIR",
+        faceConf: 88.4,
+        challengeCode: "9056",
+        heardDigits: "",
+        attempts: 0,
+        maxAttempts: 3,
+        role: "admin", // 'admin', 'teacher', or 'kiosk'
+        pipelineRunning: false
+    };
+
+    let enrolledUsers = [
+        { name: "KATHIR", enrolled_date: "2026-10-12 14:15:20" },
+        { name: "ASWIN", enrolled_date: "2026-10-12 14:18:02" }
+    ];
+
+    let attendanceLogs = [
+        { name: "KATHIR", date: "2026-10-12", time: "20:26:27", method: "Face + Spoken Code + Liveness", face_conf: 0.88, heard_digits: "9056", status: "VERIFIED" }
+    ];
+
+    let facultyAccounts = [
+        { id: 1, username: "kathir", role: "admin", created_at: "2026-10-12 14:01:05" },
+        { id: 2, username: "hod_cs", role: "teacher", created_at: "2026-10-12 14:10:00" }
+    ];
+
+    let auditLogs = [
+        { timestamp: "2026-10-12 20:26:27", username: "KATHIR", action: "ATTENDANCE_SUCCESS", details: "Method: Face + Spoken Code + Liveness | Spoken: '9056' (OK=1)" },
+        { timestamp: "2026-10-12 14:15:20", username: "kathir", action: "ENROLL_USER", details: "Enrolled face vector templates for KATHIR" },
+        { timestamp: "2026-10-12 14:01:05", username: "kathir", action: "AUTH_LOGIN", details: "Administrator logged in successfully" }
+    ];
+
+    // Clock
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clockText').innerText = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Webcam Access
+    let stream = null;
+    async function toggleWebcam() {
+        const video = document.getElementById('webcamVideo');
+        const btn = document.getElementById('btnToggleCam');
+        if (stream) {
+            stream.getTracks().forEach(t => t.stop());
+            stream = null;
+            video.srcObject = null;
+            btn.innerHTML = '<i class="fa-solid fa-camera me-1"></i>Start Camera';
+            stopPipeline();
+            return;
+        }
+
+        try {
+            stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+            video.srcObject = stream;
+            btn.innerHTML = '<i class="fa-solid fa-camera-slash me-1"></i>Stop Camera';
+            startPipeline();
+        } catch (err) {
+            console.warn("Camera access denied or unavailable, running simulated stream:", err);
+            btn.innerHTML = '<i class="fa-solid fa-video me-1"></i>Simulated Camera Active';
+            startPipeline();
+        }
+    }
+
+    // Interactive Verification Pipeline Simulator
+    let pipelineTimer = null;
+    function startPipeline() {
+        if (state.pipelineRunning) return;
+        state.pipelineRunning = true;
+        resetPipeline();
+
+        // Step 1: Liveness Simulation (Blink detection in 2 seconds)
+        pipelineTimer = setTimeout(() => {
+            state.ear = 0.18;
+            state.blinkCount = 1;
+            state.livenessPassed = true;
+            document.getElementById('badgeStep1').className = 'badge bg-success step-badge';
+            document.getElementById('badgeStep1').innerText = 'Passed';
+            document.getElementById('earStatus').innerText = `Blinks: 1/1 | EAR: 0.18 (Blink Verified)`;
+            
+            // Advance to Step 2
+            state.step = 2;
+            document.getElementById('badgeStep2').className = 'badge bg-warning text-dark step-badge';
+            document.getElementById('badgeStep2').innerText = 'Scanning';
+            document.getElementById('faceStatus').innerText = 'Matching face against enrolled templates...';
+
+            setTimeout(() => {
+                // Face recognized!
+                const overlay = document.getElementById('faceOverlay');
+                const tag = document.getElementById('faceTag');
+                overlay.classList.add('detected');
+                tag.style.display = 'block';
+
+                document.getElementById('badgeStep2').className = 'badge bg-success step-badge';
+                document.getElementById('badgeStep2').innerText = 'Identified';
+                document.getElementById('faceStatus').innerText = `${state.userName} (${state.faceConf}%)`;
+
+                // Advance to Step 3: Spoken Code
+                state.step = 3;
+                state.challengeCode = "" + Math.floor(1000 + Math.random() * 9000);
+                document.getElementById('challengeCode').innerText = state.challengeCode.split('').join(' - ');
+                document.getElementById('voiceSection').classList.remove('d-none');
+                document.getElementById('voiceStatus').innerText = 'Speak the 4 digits clearly in order.';
+                document.getElementById('attemptText').innerText = `Attempt 1 of ${state.maxAttempts} (Single-use, expires in 60s)`;
+
+                document.getElementById('resultBanner').className = 'alert alert-info mt-auto text-center fw-semibold py-3 m-0';
+                document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-microphone me-2"></i>Face Verified. Click 'Speak Code' to pronounce digits.`;
+            }, 1800);
+
+        }, 2200);
+    }
+
+    function stopPipeline() {
+        if (pipelineTimer) clearTimeout(pipelineTimer);
+        state.pipelineRunning = false;
+    }
+
+    function resetPipeline() {
+        stopPipeline();
+        state.step = 1;
+        state.blinkCount = 0;
+        state.livenessPassed = false;
+        state.heardDigits = "";
+        state.attempts = 0;
+
+        document.getElementById('badgeStep1').className = 'badge bg-secondary step-badge';
+        document.getElementById('badgeStep1').innerText = 'Waiting';
+        document.getElementById('earStatus').innerText = 'Tracking EAR & eye blinks...';
+
+        document.getElementById('badgeStep2').className = 'badge bg-secondary step-badge';
+        document.getElementById('badgeStep2').innerText = 'Locked';
+        document.getElementById('faceStatus').innerText = 'Locked (Requires Step 1)';
+
+        document.getElementById('faceOverlay').classList.remove('detected');
+        document.getElementById('faceTag').style.display = 'none';
+
+        document.getElementById('voiceSection').classList.add('d-none');
+        document.getElementById('voiceStatus').innerText = 'Locked (Requires Step 2)';
+        document.getElementById('heardDigits').innerText = 'Waiting for voice...';
+
+        document.getElementById('resultBanner').className = 'alert alert-secondary mt-auto text-center fw-semibold py-3 m-0';
+        document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Ready`;
+    }
+
+    // Step 3 Voice Recording & Verification
+    async function recordVoice() {
+        if (state.step !== 3) return;
+        const btn = document.getElementById('btnRecordVoice');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening (3s)...';
+
+        setTimeout(() => {
+            // Heard digits matching expected code
+            state.heardDigits = state.challengeCode;
+            document.getElementById('heardDigits').innerText = state.heardDigits.split('').join(' ');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
+
+            // Step 4: Attendance Marked Success
+            state.step = 4;
+            const now = new Date();
+            const timeStr = now.toTimeString().split(' ')[0];
+            const dateStr = now.toISOString().split('T')[0];
+
+            attendanceLogs.unshift({
+                name: state.userName,
+                date: dateStr,
+                time: timeStr,
+                method: "Face + Spoken Code + Liveness",
+                face_conf: state.faceConf / 100.0,
+                heard_digits: state.heardDigits,
+                status: "VERIFIED"
+            });
+
+            auditLogs.unshift({
+                timestamp: `${dateStr} ${timeStr}`,
+                username: state.userName,
+                action: "ATTENDANCE_SUCCESS",
+                details: `Method: Face + Spoken Code + Liveness | Spoken digits: '${state.heardDigits}' (OK=1)`
+            });
+
+            renderLogs();
+            renderAuditLogs();
+
+            document.getElementById('resultBanner').className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+            document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
+        }, 2500);
+    }
+
+    // Role switcher
+    function switchRole(role) {
+        state.role = role;
+        const badge = document.getElementById('navRoleBadge');
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        const tabEnroll = document.getElementById('tabEnrollNavItem');
+        const tabLogs = document.getElementById('tabLogsNavItem');
+        const tabAdmin = document.getElementById('tabAdminNavItem');
+        const tabAudit = document.getElementById('tabAuditNavItem');
+        const tabVerifyLabel = document.getElementById('tabVerifyLabel');
+
+        if (role === 'admin') {
+            badge.className = 'badge bg-danger ms-1 fs-6';
+            badge.innerHTML = '<i class="fa-solid fa-user-gear me-1"></i>Administrator Portal';
+            userMenuBtn.innerHTML = '<i class="fa-solid fa-user-circle me-1"></i>kathir (Admin)';
+            tabEnroll.style.display = 'block';
+            tabLogs.style.display = 'block';
+            tabAdmin.style.display = 'block';
+            tabAudit.style.display = 'block';
+            tabVerifyLabel.innerText = 'Live Kiosk Preview';
+        } else if (role === 'teacher') {
+            badge.className = 'badge bg-success ms-1 fs-6';
+            badge.innerHTML = '<i class="fa-solid fa-chalkboard-user me-1"></i>Faculty Portal';
+            userMenuBtn.innerHTML = '<i class="fa-solid fa-user-circle me-1"></i>hod_cs (Teacher)';
+            tabEnroll.style.display = 'block';
+            tabLogs.style.display = 'block';
+            tabAdmin.style.display = 'none';
+            tabAudit.style.display = 'none';
+            tabVerifyLabel.innerText = 'Live Kiosk Preview';
+        } else {
+            badge.className = 'badge bg-info-subtle text-info border border-info ms-1 fs-6';
+            badge.innerHTML = '<i class="fa-solid fa-user-graduate me-1"></i>Student Attendance Kiosk';
+            userMenuBtn.innerHTML = '<i class="fa-solid fa-lock me-1"></i>Public Kiosk';
+            tabEnroll.style.display = 'none';
+            tabLogs.style.display = 'none';
+            tabAdmin.style.display = 'none';
+            tabAudit.style.display = 'none';
+            tabVerifyLabel.innerText = 'Student Check-In';
+            // Switch to verify tab
+            const triggerEl = document.querySelector('#tab-verify-btn');
+            bootstrap.Tab.getInstance(triggerEl) || new bootstrap.Tab(triggerEl).show();
+        }
+    }
+
+    // Enrollment Simulation
+    function enrollUser() {
+        const input = document.getElementById('enrollName');
+        const name = input.value.trim().toUpperCase();
+        if (!name) {
+            alert('Please enter a student name / roll ID.');
+            return;
+        }
+
+        const btn = document.getElementById('btnEnroll');
+        const alertBox = document.getElementById('enrollAlert');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Capturing Face Samples...';
+        alertBox.classList.remove('d-none');
+        alertBox.className = 'alert alert-info mt-3 text-center';
+        alertBox.innerText = `Capturing 5 FaceNet deep embeddings for ${name}...`;
+
+        setTimeout(() => {
+            const nowStr = new Date().toISOString().replace('T', ' ').slice(0, 19);
+            enrolledUsers.unshift({ name: name, enrolled_date: nowStr });
+            auditLogs.unshift({
+                timestamp: nowStr,
+                username: "kathir",
+                action: "ENROLL_USER",
+                details: `Enrolled face vector templates for ${name}`
+            });
+
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up me-2"></i>Capture & Save Enrollment';
+            alertBox.className = 'alert alert-success mt-3 text-center';
+            alertBox.innerText = `Successfully enrolled ${name} (5 face templates saved).`;
+            input.value = '';
+            renderEnrolledUsers();
+            renderAuditLogs();
+        }, 1800);
+    }
+
+    function renderEnrolledUsers() {
+        const tbody = document.getElementById('enrolledUsersBody');
+        tbody.innerHTML = '';
+        enrolledUsers.forEach((u, idx) => {
+            tbody.innerHTML += `
+                <tr>
+                    <td class="fw-bold">${u.name}</td>
+                    <td class="text-secondary small font-monospace">${u.enrolled_date}</td>
+                    <td>
+                        <button class="btn btn-outline-danger btn-sm" onclick="deleteUser(${idx})">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+    }
+
+    function deleteUser(idx) {
+        if (confirm(`Remove enrolled templates for ${enrolledUsers[idx].name}?`)) {
+            enrolledUsers.splice(idx, 1);
+            renderEnrolledUsers();
+        }
+    }
+
+    // Attendance records
+    function renderLogs() {
+        const tbody = document.getElementById('logsTableBody');
+        tbody.innerHTML = '';
+        attendanceLogs.forEach(l => {
+            tbody.innerHTML += `
+                <tr>
+                    <td class="fw-bold">${l.name}</td>
+                    <td class="text-secondary small">${l.date}</td>
+                    <td class="font-monospace small">${l.time}</td>
+                    <td><span class="badge bg-secondary">${l.method}</span></td>
+                    <td class="text-info font-monospace">${(l.face_conf * 100).toFixed(1)}%</td>
+                    <td class="font-monospace text-warning">${l.heard_digits || '-'}</td>
+                    <td><span class="badge bg-success">VERIFIED</span></td>
+                </tr>
+            `;
+        });
+    }
+
+    function exportLogsCSV() {
+        let csv = "Name,Date,Time,Method,Face_Confidence,Spoken_Digits,Status\n";
+        attendanceLogs.forEach(l => {
+            csv += `${l.name},${l.date},${l.time},"${l.method}",${l.face_conf},${l.heard_digits},${l.status}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `attendance_export_${new Date().toISOString().split('T')[0]}.csv`;
+        a.click();
+    }
+
+    // Faculty management
+    function renderTeachers() {
+        const tbody = document.getElementById('teachersTableBody');
+        tbody.innerHTML = '';
+        facultyAccounts.forEach(t => {
+            tbody.innerHTML += `
+                <tr>
+                    <td>${t.id}</td>
+                    <td class="fw-bold">${t.username}</td>
+                    <td><span class="badge ${t.role === 'admin' ? 'bg-danger' : 'bg-success'}">${t.role}</span></td>
+                    <td class="small text-secondary">${t.created_at}</td>
+                </tr>
+            `;
+        });
+    }
+
+    function createTeacher() {
+        const uInput = document.getElementById('teacherUsername');
+        const pInput = document.getElementById('teacherPassword');
+        const rInput = document.getElementById('teacherRole');
+        const alertBox = document.getElementById('teacherAlert');
+
+        const u = uInput.value.trim();
+        const p = pInput.value.trim();
+        const r = rInput.value;
+
+        if (!u || p.length < 6) {
+            alertBox.className = 'alert alert-danger mt-3 text-center';
+            alertBox.innerText = 'Username required and password must be >= 6 chars.';
+            alertBox.classList.remove('d-none');
+            return;
+        }
+
+        facultyAccounts.push({
+            id: facultyAccounts.length + 1,
+            username: u,
+            role: r,
+            created_at: new Date().toISOString().replace('T', ' ').slice(0, 19)
+        });
+
+        alertBox.className = 'alert alert-success mt-3 text-center';
+        alertBox.innerText = `Account '${u}' created successfully.`;
+        alertBox.classList.remove('d-none');
+        uInput.value = '';
+        pInput.value = '';
+        renderTeachers();
+    }
+
+    // Audit logs
+    function renderAuditLogs() {
+        const tbody = document.getElementById('auditTableBody');
+        tbody.innerHTML = '';
+        auditLogs.forEach(a => {
+            tbody.innerHTML += `
+                <tr>
+                    <td class="text-secondary small font-monospace">${a.timestamp}</td>
+                    <td class="fw-bold">${a.username}</td>
+                    <td><span class="badge bg-secondary">${a.action}</span></td>
+                    <td class="small">${a.details}</td>
+                </tr>
+            `;
+        });
+    }
+
+    // Initialize
+    document.addEventListener("DOMContentLoaded", () => {
+        renderEnrolledUsers();
+        renderLogs();
+        renderTeachers();
+        renderAuditLogs();
+        // Auto-request webcam on load
+        toggleWebcam();
+    });
+</script>
+</body>
+</html>
