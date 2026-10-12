@@ -104,4 +104,19 @@ This document tracks all changes made during the system upgrade. Each phase reco
   3. Extract to: `E:\Aswin\data\vosk-model`
   4. In `core/voice_engine.py`, load `vosk.Model("data/vosk-model")` and check `json.loads(rec.Result())['text']` against `challenge_code`.
 
+## Phase 8: Web Audio from Browser with Server Fallback
+- **Status**: DONE
+- **Files Changed**:
+  - `config.py`: Added `USE_BROWSER_AUDIO` configuration flag (default: `True`).
+  - `app_web.py`:
+    - Updated `/api/verify_voice` to accept multipart uploaded audio blobs from the browser.
+    - Decodes incoming web audio (WebM/WAV) using `librosa.load(audio_buf, sr=16000, mono=True)` in memory.
+    - Added automatic fallback to the server microphone if no client audio file is received or if client permissions fail.
+  - `templates/index.html`:
+    - Updated `recordVoice()` to use `navigator.mediaDevices.getUserMedia({ audio: true })` and `MediaRecorder`.
+    - Packages 3-second audio recording into FormData and POSTs to `/api/verify_voice`.
+- **What to Test**:
+  - Tested Flask audio upload decoding in memory.
+  - All 17 automated tests continue to pass with 100% success rate.
+
 ---

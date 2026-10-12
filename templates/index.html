@@ -438,7 +438,38 @@
         btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Recording audio (3s)...';
 
         try {
-            const res = await fetch('/api/verify_voice', { method: 'POST' });
+            let formData = new FormData();
+
+            // Attempt browser-side audio capture if supported
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    const mediaRecorder = new MediaRecorder(stream);
+                    const chunks = [];
+                    mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+
+                    const recordPromise = new Promise((resolve) => {
+                        mediaRecorder.onstop = () => {
+                            stream.getTracks().forEach(t => t.stop());
+                            const blob = new Blob(chunks, { type: 'audio/webm' });
+                            resolve(blob);
+                        };
+                    });
+
+                    mediaRecorder.start();
+                    await new Promise(r => setTimeout(r, 3000));
+                    mediaRecorder.stop();
+                    const audioBlob = await recordPromise;
+                    formData.append('audio', audioBlob, 'mic_recording.webm');
+                } catch (micErr) {
+                    console.warn("Client microphone access unavailable, using server mic fallback:", micErr);
+                }
+            }
+
+            const res = await fetch('/api/verify_voice', {
+                method: 'POST',
+                body: formData
+            });
             const data = await res.json();
             if (data.success) {
                 pollStatus();
@@ -449,7 +480,7 @@
             alert('Voice recording failed: ' + e);
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Record & Verify Voice (3s)';
+            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Record & Match Voice (3s)';
         }
     }
 

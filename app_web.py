@@ -283,7 +283,25 @@ def api_verify_voice():
     user = state["user_name"]
 
     try:
-        audio = voice_engine.record_audio(duration=3.0)
+        audio = None
+        # Check if browser uploaded audio
+        from config import USE_BROWSER_AUDIO
+        if USE_BROWSER_AUDIO and "audio" in request.files and request.files["audio"].filename:
+            import io
+            import librosa
+            audio_file = request.files["audio"]
+            audio_bytes = audio_file.read()
+            if len(audio_bytes) > 0:
+                try:
+                    audio_buf = io.BytesIO(audio_bytes)
+                    audio, sr = librosa.load(audio_buf, sr=16000, mono=True)
+                except Exception:
+                    audio = None
+
+        # Fallback to server microphone
+        if audio is None:
+            audio = voice_engine.record_audio(duration=3.0)
+
         is_audible, rms = voice_engine.check_audio_energy(audio)
         if not is_audible:
             state["is_recording"] = False

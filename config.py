@@ -27,6 +27,7 @@ REQUIRED_BLINKS = int(os.environ.get("REQUIRED_BLINKS", 1))       # Number of bl
 AUDIO_SAMPLE_RATE = 16000
 AUDIO_DURATION = 3.0  # seconds
 MIN_AUDIO_RMS = 0.005  # Energy threshold to reject silence
+USE_BROWSER_AUDIO = os.environ.get("USE_BROWSER_AUDIO", "True").lower() in ("true", "1")
 
 # Security and Session
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-biometric-key-2026-viva")
