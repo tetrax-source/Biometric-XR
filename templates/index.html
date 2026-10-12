@@ -179,23 +179,20 @@
                             </div>
                         </div>
 
-                        <!-- Step 3: Spoken 4-Digit Challenge -->
+                        <!-- Step 3: Spoken Confirmation ("Present") -->
                         <div class="card mb-3 p-3 bg-dark border-secondary">
-                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Spoken 4-Digit Challenge</div>
+                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Vocal Attendance Confirmation</div>
                             <div class="text-secondary small mb-2" id="voiceStatus">Locked (Requires Step 2)</div>
                             <div id="voiceSection" class="d-none">
-                                <div class="mb-2 text-center">
-                                    <span class="text-muted small d-block mb-1">Speak this random 4-digit code:</span>
-                                    <span class="challenge-code" id="challengeCode">----</span>
-                                </div>
-                                <div class="alert alert-dark border-secondary py-2 px-3 small text-center mb-2" id="heardBox">
-                                    <span>Digits Heard: </span><strong class="text-info fs-6" id="heardDigits">Waiting for voice...</strong>
-                                </div>
-                                <div class="text-center small text-secondary mb-2" id="attemptText">
-                                    Attempt 1 of 3 (Single-use, expires in 60s)
-                                </div>
-                                <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
-                                    <i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)
+                                 <div class="mb-2 text-center">
+                                     <span class="text-muted small d-block mb-1">Say this word into microphone:</span>
+                                     <span class="challenge-code text-uppercase" id="challengeCode" style="font-size: 1.5rem; letter-spacing: 2px;">"PRESENT"</span>
+                                 </div>
+                                 <div class="alert alert-dark border-secondary py-2 px-3 small text-center mb-2" id="heardBox">
+                                     <span>Speech Detected: </span><strong class="text-info fs-6" id="heardDigits">Waiting for your voice...</strong>
+                                 </div>
+                                 <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
+                                    <i class="fa-solid fa-microphone me-2"></i>Click to Say "Present"
                                 </button>
                             </div>
                         </div>
@@ -459,42 +456,30 @@
         const heardEl = document.getElementById('heardDigits');
         const alertBox = document.getElementById('resultBanner');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... speak digits now';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... say "Present" now';
+        heardEl.innerText = 'Listening for "Present"...';
 
-        let liveDigitsHeard = "";
-        const wordMap = {
-            "zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3",
-            "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9"
-        };
-
-        // 1. REAL-TIME INSTANT FEEDBACK using browser Web Speech API if supported
+        let spokenWord = "";
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
         if (SpeechRec) {
             try {
                 realTimeRec = new SpeechRec();
-                realTimeRec.continuous = true;
+                realTimeRec.continuous = false;
                 realTimeRec.interimResults = true;
                 realTimeRec.lang = 'en-US';
 
                 realTimeRec.onresult = (event) => {
-                    let transcript = "";
-                    for (let i = 0; i < event.results.length; ++i) {
-                        transcript += event.results[i][0].transcript + " ";
-                    }
-                    const words = transcript.toLowerCase().trim().split(/\s+/);
-                    let detected = [];
-                    words.forEach(w => {
-                        if (wordMap[w]) detected.push(wordMap[w]);
-                        else {
-                            // Also check if raw numbers like "4", "5" were returned
-                            for (let ch of w) {
-                                if (ch >= '0' && ch <= '9') detected.push(ch);
-                            }
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                        spokenWord = transcript;
+                        heardEl.innerText = `"${transcript}"`;
+                        if (transcript.includes("present") || transcript.includes("here") || transcript.includes("yes")) {
+                            spokenWord = "present";
+                            heardEl.innerText = '"PRESENT" (Verified)';
+                            try { realTimeRec.stop(); } catch (_) {}
+                            break;
                         }
-                    });
-                    if (detected.length > 0) {
-                        liveDigitsHeard = detected.join('');
-                        heardEl.innerText = detected.join(' ');
                     }
                 };
                 realTimeRec.start();
@@ -506,7 +491,6 @@
         try {
             let formData = new FormData();
 
-            // 2. Audio recording for backend Vosk processing
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -523,8 +507,7 @@
                     });
 
                     mediaRecorder.start();
-                    // Give 3.5 seconds to comfortably pronounce all 4 digits
-                    await new Promise(r => setTimeout(r, 3500));
+                    await new Promise(r => setTimeout(r, 3200));
                     mediaRecorder.stop();
                     const audioBlob = await recordPromise;
                     formData.append('audio', audioBlob, 'mic_recording.webm');
@@ -537,9 +520,8 @@
                 try { realTimeRec.stop(); } catch (_) {}
             }
 
-            // Append live digits heard from client as assistant payload
-            if (liveDigitsHeard) {
-                formData.append('client_heard', liveDigitsHeard);
+            if (spokenWord) {
+                formData.append('client_heard', spokenWord);
             }
 
             const res = await fetch('/api/verify_voice', {

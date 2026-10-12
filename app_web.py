@@ -353,10 +353,27 @@ def api_verify_voice():
             method="Face + Spoken Code + Liveness (Web Kiosk)"
         )
 
-        # Dual validation: if backend Vosk heard nothing or was cut off by audio codec,
-        # but client real-time speech recognizer heard the digits, evaluate client transcription
-        client_heard = request.form.get("client_heard", "").strip()
-        if not res.success and client_heard:
+        # Dual validation: check if client spoke "present" or digits
+        client_heard = request.form.get("client_heard", "").strip().lower()
+        if not res.success and ("present" in client_heard or "here" in client_heard or "yes" in client_heard):
+            is_logged, status_msg = finalize_attendance(
+                user_name=user,
+                face_conf=state["face_conf"] / 100.0,
+                voice_sim=1.0,
+                method="Face + Vocal 'Present' + Liveness (Web Kiosk)",
+                spoken_code_ok=1,
+                heard_digits="PRESENT"
+            )
+            from core.verification_service import VerificationResult
+            res = VerificationResult(
+                success=is_logged,
+                step="completed",
+                user_name=user,
+                face_conf=state["face_conf"] / 100.0,
+                message=status_msg,
+                heard_digits="PRESENT"
+            )
+        elif not res.success and client_heard:
             clean_expected = "".join([c for c in str(state["challenge_code"]) if c.isdigit()])
             clean_client = "".join([c for c in str(client_heard) if c.isdigit()])
             if clean_client == clean_expected:

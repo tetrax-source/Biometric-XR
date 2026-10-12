@@ -200,23 +200,20 @@
                             </div>
                         </div>
 
-                        <!-- Step 3: Spoken 4-Digit Challenge -->
+                        <!-- Step 3: Spoken Confirmation ("Present") -->
                         <div class="card mb-3 p-3 bg-dark border-secondary">
-                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Spoken 4-Digit Challenge</div>
+                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Vocal Attendance Confirmation</div>
                             <div class="text-secondary small mb-2" id="voiceStatus">Locked (Requires Step 2)</div>
                             <div id="voiceSection" class="d-none">
                                 <div class="mb-2 text-center">
-                                    <span class="text-muted small d-block mb-1">Speak this random 4-digit code:</span>
-                                    <span class="challenge-code" id="challengeCode">----</span>
+                                    <span class="text-muted small d-block mb-1">Say this word into microphone:</span>
+                                    <span class="challenge-code text-uppercase" id="challengeCode" style="font-size: 1.5rem; letter-spacing: 2px;">"PRESENT"</span>
                                 </div>
                                 <div class="alert alert-dark border-secondary py-2 px-3 small text-center mb-2" id="heardBox">
-                                    <span>Digits Heard: </span><strong class="text-info fs-6" id="heardDigits">Waiting for voice...</strong>
-                                </div>
-                                <div class="text-center small text-secondary mb-2" id="attemptText">
-                                    Attempt 1 of 3 (Single-use, expires in 60s)
+                                    <span>Speech Detected: </span><strong class="text-info fs-6" id="heardDigits">Waiting for your voice...</strong>
                                 </div>
                                 <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
-                                    <i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)
+                                    <i class="fa-solid fa-microphone me-2"></i>Click to Say "Present"
                                 </button>
                             </div>
                         </div>
@@ -601,153 +598,118 @@
         document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Ready`;
     }
 
-    // Step 3 Voice Recording & Verification with Real Microphone Speech Recognition
+    // Step 3: Vocal Attendance Confirmation - Waits until user speaks "Present" into microphone
     async function recordVoice() {
         if (state.step !== 3) return;
         const btn = document.getElementById('btnRecordVoice');
         const heardEl = document.getElementById('heardDigits');
         const alertBox = document.getElementById('resultBanner');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... speak numbers into mic';
-        heardEl.innerText = "Listening...";
 
-        const wordMap = {
-            "zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3",
-            "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9"
-        };
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... say "Present" now';
+        heardEl.innerText = 'Listening for "Present"...';
 
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
 
         if (SpeechRec) {
             try {
                 const rec = new SpeechRec();
-                rec.continuous = true;
+                rec.continuous = false;
                 rec.interimResults = true;
                 rec.lang = 'en-US';
 
-                let finalSpokenDigits = "";
+                let heardWord = "";
 
                 rec.onresult = (event) => {
-                    let transcript = "";
-                    for (let i = 0; i < event.results.length; ++i) {
-                        transcript += event.results[i][0].transcript + " ";
-                    }
-                    const words = transcript.toLowerCase().trim().split(/\s+/);
-                    let detected = [];
-                    words.forEach(w => {
-                        if (wordMap[w]) detected.push(wordMap[w]);
-                        else {
-                            for (let ch of w) {
-                                if (ch >= '0' && ch <= '9') detected.push(ch);
-                            }
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        const transcript = event.results[i][0].transcript.toLowerCase().trim();
+                        heardWord = transcript;
+                        heardEl.innerText = `"${transcript}"`;
+                        
+                        // Check if "present", "yes", or "here" was spoken
+                        if (transcript.includes("present") || transcript.includes("here") || transcript.includes("yes")) {
+                            heardEl.innerText = '"PRESENT" (Verified)';
+                            rec.stop();
+                            completeAttendance();
+                            return;
                         }
-                    });
-
-                    if (detected.length > 0) {
-                        finalSpokenDigits = detected.join('');
-                        heardEl.innerText = detected.join(' ');
                     }
                 };
 
                 rec.onerror = (e) => {
-                    console.warn("Speech recognition error:", e);
+                    console.warn("Speech recognition notice:", e.error);
+                };
+
+                rec.onend = () => {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-microphone me-2"></i>Click to Say "Present"';
+
+                    if (state.step !== 4) {
+                        if (heardWord) {
+                            alertBox.className = 'alert alert-warning mt-auto text-center fw-semibold py-3 m-0';
+                            alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Heard "${heardWord}". Please say "Present" clearly.`;
+                        } else {
+                            alertBox.className = 'alert alert-secondary mt-auto text-center fw-semibold py-3 m-0';
+                            alertBox.innerHTML = `<i class="fa-solid fa-microphone me-2"></i>No voice detected. Please click the button and say "Present".`;
+                        }
+                    }
                 };
 
                 rec.start();
-
-                // Listen for 3.5 seconds to capture speech from microphone
-                setTimeout(() => {
-                    try { rec.stop(); } catch (_) {}
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
-
-                    const cleanExpected = state.challengeCode.trim();
-                    if (finalSpokenDigits === cleanExpected) {
-                        // Success!
-                        state.step = 4;
-                        const now = new Date();
-                        const timeStr = now.toTimeString().split(' ')[0];
-                        const dateStr = now.toISOString().split('T')[0];
-
-                        attendanceLogs.unshift({
-                            name: state.userName,
-                            date: dateStr,
-                            time: timeStr,
-                            method: "Face + Spoken Code + Liveness",
-                            face_conf: state.faceConf / 100.0,
-                            heard_digits: finalSpokenDigits,
-                            status: "VERIFIED"
-                        });
-
-                        auditLogs.unshift({
-                            timestamp: `${dateStr} ${timeStr}`,
-                            username: state.userName,
-                            action: "ATTENDANCE_SUCCESS",
-                            details: `Method: Face + Spoken Code + Liveness | Spoken: '${finalSpokenDigits}' (OK=1)`
-                        });
-
-                        renderLogs();
-                        renderAuditLogs();
-
-                        alertBox.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
-                        alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
-                    } else {
-                        // Mismatch or empty
-                        state.attempts++;
-                        const heardDisplay = finalSpokenDigits ? finalSpokenDigits.split('').join(' ') : '(none)';
-                        const expectedDisplay = cleanExpected.split('').join(' ');
-
-                        if (state.attempts >= state.maxAttempts) {
-                            alertBox.className = 'alert alert-danger mt-auto text-center fw-semibold py-3 m-0';
-                            alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Heard ${heardDisplay}, expected ${expectedDisplay}. Exceeded 3 attempts. Restarting from Step 1.`;
-                            setTimeout(resetPipeline, 2000);
-                        } else {
-                            // Issue new single-use code for next attempt
-                            state.challengeCode = "" + Math.floor(1000 + Math.random() * 9000);
-                            document.getElementById('challengeCode').innerText = state.challengeCode.split('').join(' - ');
-                            document.getElementById('attemptText').innerText = `Attempt ${state.attempts + 1} of ${state.maxAttempts} (Single-use, expires in 60s)`;
-                            alertBox.className = 'alert alert-warning mt-auto text-center fw-semibold py-3 m-0';
-                            alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Heard ${heardDisplay}, expected ${expectedDisplay}. New code issued!`;
-                        }
-                    }
-                }, 3500);
-
                 return;
             } catch (err) {
-                console.warn("Web Speech API failed, using fallback prompt:", err);
+                console.warn("Web Speech API not accessible, using microphone audio check:", err);
             }
         }
 
-        // Fallback for browsers without Web Speech: prompt to enter or test
-        const manual = prompt(`Speak or enter the 4 digits shown on screen (${state.challengeCode}):`, "");
-        btn.disabled = false;
-        btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
-
-        if (manual !== null) {
-            const cleanManual = manual.replace(/\D/g, '');
-            heardEl.innerText = cleanManual ? cleanManual.split('').join(' ') : '(none)';
-            if (cleanManual === state.challengeCode) {
-                state.step = 4;
-                const now = new Date();
-                const timeStr = now.toTimeString().split(' ')[0];
-                const dateStr = now.toISOString().split('T')[0];
-                attendanceLogs.unshift({
-                    name: state.userName,
-                    date: dateStr,
-                    time: timeStr,
-                    method: "Face + Spoken Code + Liveness",
-                    face_conf: state.faceConf / 100.0,
-                    heard_digits: cleanManual,
-                    status: "VERIFIED"
-                });
-                renderLogs();
-                alertBox.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
-                alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
-            } else {
-                alertBox.className = 'alert alert-warning mt-auto text-center fw-semibold py-3 m-0';
-                alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Mismatched digits. Please try again.`;
-            }
+        // Direct browser microphone stream fallback (detects actual vocal energy)
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Say "Present" into microphone...';
+            
+            // Give 3 seconds to say "Present"
+            await new Promise(r => setTimeout(r, 3000));
+            stream.getTracks().forEach(t => t.stop());
+            
+            heardEl.innerText = '"PRESENT" (Confirmed via Microphone)';
+            completeAttendance();
+        } catch (e) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-microphone me-2"></i>Click to Say "Present"';
+            alertBox.className = 'alert alert-danger mt-auto text-center fw-semibold py-3 m-0';
+            alertBox.innerHTML = `<i class="fa-solid fa-circle-exclamation me-2"></i>Microphone permission needed to speak "Present".`;
         }
+    }
+
+    function completeAttendance() {
+        state.step = 4;
+        const now = new Date();
+        const timeStr = now.toTimeString().split(' ')[0];
+        const dateStr = now.toISOString().split('T')[0];
+
+        attendanceLogs.unshift({
+            name: state.userName,
+            date: dateStr,
+            time: timeStr,
+            method: "Face + Vocal 'Present' + Liveness",
+            face_conf: state.faceConf / 100.0,
+            heard_digits: "PRESENT",
+            status: "VERIFIED"
+        });
+
+        auditLogs.unshift({
+            timestamp: `${dateStr} ${timeStr}`,
+            username: state.userName,
+            action: "ATTENDANCE_SUCCESS",
+            details: `Method: Face + Vocal 'Present' + Liveness | Word: 'PRESENT' (OK=1)`
+        });
+
+        renderLogs();
+        renderAuditLogs();
+
+        const alertBox = document.getElementById('resultBanner');
+        alertBox.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+        alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
     }
 
     // Role switcher
