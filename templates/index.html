@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Biometric Attendance System</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+        }
+        .card {
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 12px;
+        }
+        .video-box {
+            width: 100%;
+            max-width: 640px;
+            height: auto;
+            border-radius: 10px;
+            border: 2px solid #334155;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+            background: #000;
+        }
+        .step-badge {
+            font-size: 0.95rem;
+            padding: 8px 14px;
+            border-radius: 8px;
+        }
+        .challenge-code {
+            font-family: monospace;
+            font-size: 1.6rem;
+            letter-spacing: 4px;
+            font-weight: bold;
+            color: #38bdf8;
+            background: #0f172a;
+            padding: 6px 14px;
+            border-radius: 6px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+<nav class="navbar navbar-expand-lg border-bottom border-secondary mb-4" style="background-color: #1e293b;">
+    <div class="container-fluid px-4">
+        <a class="navbar-brand fw-bold text-primary" href="#">
+            <i class="fa-solid fa-shield-halved me-2"></i>BIO-SECURE <span class="badge bg-secondary ms-1 fs-6">Web Portal</span>
+        </a>
+        <div class="d-flex align-items-center">
+            <span class="text-secondary small me-3" id="clockText"></span>
+            <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
+                <i class="fa-solid fa-circle-dot me-1"></i> System Online
+            </span>
+        </div>
+    </div>
+</nav>
+
+<div class="container-fluid px-4 pb-5">
+    <!-- Top Nav Tabs -->
+    <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active px-4" id="tab-verify-btn" data-bs-toggle="pill" data-bs-target="#tab-verify" type="button">
+                <i class="fa-solid fa-camera me-2"></i>Live Verification
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4" id="tab-enroll-btn" data-bs-toggle="pill" data-bs-target="#tab-enroll" type="button">
+                <i class="fa-solid fa-user-plus me-2"></i>Enroll New User
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4" id="tab-logs-btn" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button" onclick="loadLogs()">
+                <i class="fa-solid fa-clipboard-list me-2"></i>Attendance Logs
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content" id="pills-tabContent">
+        <!-- TAB 1: LIVE VERIFICATION -->
+        <div class="tab-pane fade show active" id="tab-verify" role="tabpanel">
+            <div class="row g-4">
+                <!-- Video Monitor Column -->
+                <div class="col-lg-7 text-center">
+                    <div class="card p-3 shadow-sm">
+                        <div class="d-flex justify-content-between align-items-center mb-2 px-2">
+                            <h5 class="m-0 fw-semibold"><i class="fa-solid fa-video text-primary me-2"></i>Webcam Live Stream</h5>
+                            <button class="btn btn-outline-secondary btn-sm" onclick="resetPipeline()">
+                                <i class="fa-solid fa-rotate me-1"></i>Reset Pipeline
+                            </button>
+                        </div>
+                        <img src="/video_feed" class="video-box mx-auto my-2" alt="Webcam Stream" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'640\' height=\'480\'><rect width=\'640\' height=\'480\' fill=\'%23111\'/><text x=\'50%25\' y=\'50%25\' fill=\'white\' font-size=\'20\' text-anchor=\'middle\'>Camera Initializing...</text></svg>'">
+                        <div class="text-secondary small mt-2">
+                            <i class="fa-solid fa-info-circle me-1"></i> Look into the camera and blink naturally to start verification.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Pipeline Status Cards -->
+                <div class="col-lg-5">
+                    <div class="card p-4 shadow-sm h-100">
+                        <h5 class="fw-bold mb-3 border-bottom pb-2">
+                            <i class="fa-solid fa-list-check text-info me-2"></i>Authentication Pipeline
+                        </h5>
+
+                        <!-- Step 1: Liveness -->
+                        <div class="card mb-3 p-3 bg-dark border-secondary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold"><i class="fa-solid fa-eye me-2 text-warning"></i>Step 1: Blink Liveness</div>
+                                    <div class="text-secondary small mt-1" id="earStatus">Tracking EAR & eye blinks...</div>
+                                </div>
+                                <span class="badge bg-secondary step-badge" id="badgeStep1">Waiting</span>
+                            </div>
+                        </div>
+
+                        <!-- Step 2: Face Recognition -->
+                        <div class="card mb-3 p-3 bg-dark border-secondary">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <div>
+                                    <div class="fw-bold"><i class="fa-solid fa-id-card me-2 text-info"></i>Step 2: Face Recognition</div>
+                                    <div class="text-secondary small mt-1" id="faceStatus">Locked (Requires Step 1)</div>
+                                </div>
+                                <span class="badge bg-secondary step-badge" id="badgeStep2">Locked</span>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Voice Verification -->
+                        <div class="card mb-3 p-3 bg-dark border-secondary">
+                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Voice Challenge</div>
+                            <div class="text-secondary small mb-2" id="voiceStatus">Locked (Requires Step 2)</div>
+                            <div id="voiceSection" class="d-none">
+                                <div class="mb-2">
+                                    <span class="text-muted small">Speak this code:</span><br>
+                                    <span class="challenge-code" id="challengeCode">----</span>
+                                </div>
+                                <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
+                                    <i class="fa-solid fa-microphone-lines me-2"></i>Record & Verify Voice (3s)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Step 4: Result Banner -->
+                        <div class="alert alert-secondary mt-auto text-center fw-semibold py-3 m-0" id="resultBanner">
+                            <i class="fa-solid fa-hourglass-start me-2"></i>System Ready
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 2: ENROLLMENT -->
+        <div class="tab-pane fade" id="tab-enroll" role="tabpanel">
+            <div class="row justify-content-center">
+                <div class="col-md-6">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-plus text-primary me-2"></i>Enroll New Individual</h5>
+                        <p class="text-secondary small">
+                            Position yourself in front of the camera, enter your name, and click Enroll. The system will automatically capture 5 face embeddings and 1 voice sample.
+                        </p>
+                        <div class="mb-3">
+                            <label class="form-label fw-semibold">Full Name / ID</label>
+                            <input type="text" class="form-control form-control-lg bg-dark text-white border-secondary" id="enrollName" placeholder="e.g. ASWIN">
+                        </div>
+                        <button class="btn btn-success btn-lg w-100 fw-bold" id="btnEnroll" onclick="enrollUser()">
+                            <i class="fa-solid fa-cloud-arrow-up me-2"></i>Start Enrollment
+                        </button>
+                        <div class="alert alert-info mt-3 d-none text-center" id="enrollAlert"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 3: ATTENDANCE LOGS -->
+        <div class="tab-pane fade" id="tab-logs" role="tabpanel">
+            <div class="card p-4 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0"><i class="fa-solid fa-table text-info me-2"></i>Today's Attendance Records</h5>
+                    <div>
+                        <a href="/api/export_csv" class="btn btn-outline-success me-2">
+                            <i class="fa-solid fa-file-csv me-1"></i>Download CSV
+                        </a>
+                        <button class="btn btn-outline-primary" onclick="loadLogs()">
+                            <i class="fa-solid fa-rotate me-1"></i>Refresh
+                        </button>
+                    </div>
+                </div>
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover table-striped align-middle">
+                        <thead>
+                            <tr class="table-primary text-white">
+                                <th>Name</th>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Method</th>
+                                <th>Face Conf</th>
+                                <th>Voice Sim</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <tr><td colspan="7" class="text-center py-4 text-muted">Loading logs...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    function updateClock() {
+        const now = new Date();
+        document.getElementById('clockText').innerText = now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
+
+    // Poll backend status
+    async function pollStatus() {
+        try {
+            const res = await fetch('/api/status');
+            const data = await res.json();
+
+            // Step 1: Liveness
+            document.getElementById('earStatus').innerText = `Blinks: ${data.blink_count}/1 | EAR: ${data.ear}`;
+            const badge1 = document.getElementById('badgeStep1');
+            if (data.liveness_passed) {
+                badge1.className = 'badge bg-success step-badge';
+                badge1.innerText = 'Passed';
+            } else {
+                badge1.className = 'badge bg-secondary step-badge';
+                badge1.innerText = 'Waiting';
+            }
+
+            // Step 2: Face
+            const badge2 = document.getElementById('badgeStep2');
+            const faceText = document.getElementById('faceStatus');
+            if (data.step >= 2) {
+                if (data.user_name) {
+                    badge2.className = 'badge bg-success step-badge';
+                    badge2.innerText = 'Identified';
+                    faceText.innerText = `${data.user_name} (${data.face_conf}%)`;
+                } else {
+                    badge2.className = 'badge bg-warning text-dark step-badge';
+                    badge2.innerText = 'Scanning';
+                    faceText.innerText = 'Looking for matching face...';
+                }
+            } else {
+                badge2.className = 'badge bg-secondary step-badge';
+                badge2.innerText = 'Locked';
+                faceText.innerText = 'Locked (Requires Step 1)';
+            }
+
+            // Step 3: Voice
+            const voiceSec = document.getElementById('voiceSection');
+            const voiceText = document.getElementById('voiceStatus');
+            if (data.step >= 3) {
+                voiceSec.classList.remove('d-none');
+                document.getElementById('challengeCode').innerText = data.challenge_code || '----';
+                voiceText.innerText = data.voice_status;
+            } else {
+                voiceSec.classList.add('d-none');
+                voiceText.innerText = 'Locked (Requires Step 2)';
+            }
+
+            // Step 4: Banner
+            const banner = document.getElementById('resultBanner');
+            if (data.step === 4) {
+                banner.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+                banner.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>${data.result_message}`;
+            } else if (data.result_message.includes('not recognized')) {
+                banner.className = 'alert alert-danger mt-auto text-center fw-semibold py-3 m-0';
+                banner.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>${data.result_message}`;
+            } else {
+                banner.className = 'alert alert-secondary mt-auto text-center fw-semibold py-3 m-0';
+                banner.innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>${data.result_message}`;
+            }
+        } catch (err) {
+            console.error(err);
+        }
+    }
+    setInterval(pollStatus, 900);
+
+    async function resetPipeline() {
+        await fetch('/api/reset', { method: 'POST' });
+        pollStatus();
+    }
+
+    async function recordVoice() {
+        const btn = document.getElementById('btnRecordVoice');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Recording audio (3s)...';
+
+        try {
+            const res = await fetch('/api/verify_voice', { method: 'POST' });
+            const data = await res.json();
+            if (data.success) {
+                pollStatus();
+            } else {
+                alert(data.error || data.message);
+            }
+        } catch (e) {
+            alert('Voice recording failed: ' + e);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Record & Verify Voice (3s)';
+        }
+    }
+
+    async function enrollUser() {
+        const nameInput = document.getElementById('enrollName');
+        const name = nameInput.value.trim();
+        if (!name) {
+            alert('Please enter a name.');
+            return;
+        }
+
+        const btn = document.getElementById('btnEnroll');
+        const alertBox = document.getElementById('enrollAlert');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enrolling (Look at camera & speak)...';
+        alertBox.classList.remove('d-none');
+        alertBox.className = 'alert alert-info mt-3 text-center';
+        alertBox.innerText = 'Capturing face images and recording voice sample...';
+
+        try {
+            const res = await fetch('/api/enroll', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: name })
+            });
+            const data = await res.json();
+            if (data.success) {
+                alertBox.className = 'alert alert-success mt-3 text-center';
+                alertBox.innerText = data.message;
+                nameInput.value = '';
+            } else {
+                alertBox.className = 'alert alert-danger mt-3 text-center';
+                alertBox.innerText = data.error;
+            }
+        } catch (e) {
+            alertBox.className = 'alert alert-danger mt-3 text-center';
+            alertBox.innerText = 'Enrollment error: ' + e;
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up me-2"></i>Start Enrollment';
+        }
+    }
+
+    async function loadLogs() {
+        const tbody = document.getElementById('logsTableBody');
+        try {
+            const res = await fetch('/api/logs');
+            const data = await res.json();
+            tbody.innerHTML = '';
+            if (!data.logs || data.logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No attendance records found.</td></tr>';
+                return;
+            }
+            data.logs.forEach(log => {
+                const conf = log.face_confidence ? (log.face_confidence * 100).toFixed(1) + '%' : 'N/A';
+                const sim = log.voice_similarity ? (log.voice_similarity * 100).toFixed(1) + '%' : 'N/A';
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="fw-bold">${log.user_name}</td>
+                        <td>${log.date}</td>
+                        <td>${log.time}</td>
+                        <td><span class="badge bg-secondary">${log.verification_method || 'Multi-Modal'}</span></td>
+                        <td>${conf}</td>
+                        <td>${sim}</td>
+                        <td><span class="badge bg-success">Present</span></td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to load logs.</td></tr>';
+        }
+    }
+</script>
+</body>
+</html>
