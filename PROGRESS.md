@@ -78,4 +78,13 @@ This document tracks all changes made during the system upgrade. Each phase reco
   - Ran `python evaluate.py`: Generated `evaluation_results.csv` and `evaluation_roc_curves.png`.
   - Confirmed configured thresholds (0.55 face, 0.50 voice) produce reliable baseline FAR/FRR metrics.
 
+## Phase 6: Automated Testing Suite
+- **Status**: DONE
+- **Files Changed**:
+  - `tests/test_database.py`: Unit tests for database table creation, foreign keys, embedding serialization roundtrip (float32 byte-exact), user storage, voice upsert, duplicate attendance prevention, and audit logging.
+  - `tests/test_biometrics.py`: Unit tests for cosine similarity properties, geometric Eye Aspect Ratio (EAR) on dummy landmark coordinates (open vs closed eyes), FaceEngine matching, and VoiceEngine matching.
+  - `tests/test_auth_routes.py`: Integration tests for password hashing, kiosk public access, unauthenticated endpoint protection (401), login flow, role-based access control (Teacher vs Admin 403), and CSRF token verification.
+- **What to Test**:
+  - Ran `python -m pytest tests/ -v`: All 17 tests passed (100% success rate).
+
 ---
