@@ -54,9 +54,15 @@
         <a class="navbar-brand fw-bold text-primary" href="/">
             <i class="fa-solid fa-shield-halved me-2"></i>BIO-SECURE 
             {% if current_user %}
-            <span class="badge bg-primary ms-1 fs-6">{{ current_user.role|capitalize }} Portal</span>
+                {% if current_user.role == 'admin' %}
+                <span class="badge bg-danger ms-1 fs-6"><i class="fa-solid fa-user-gear me-1"></i>Administrator Portal</span>
+                {% elif current_user.role == 'teacher' %}
+                <span class="badge bg-success ms-1 fs-6"><i class="fa-solid fa-chalkboard-user me-1"></i>Faculty Portal</span>
+                {% else %}
+                <span class="badge bg-primary ms-1 fs-6">{{ current_user.role|capitalize }} Portal</span>
+                {% endif %}
             {% else %}
-            <span class="badge bg-secondary ms-1 fs-6">Kiosk Mode</span>
+            <span class="badge bg-info-subtle text-info border border-info ms-1 fs-6"><i class="fa-solid fa-user-graduate me-1"></i>Student Attendance Kiosk</span>
             {% endif %}
         </a>
         <div class="d-flex align-items-center">
@@ -87,14 +93,15 @@
 <div class="container-fluid px-4 pb-5">
     <!-- Top Nav Tabs -->
     <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
+        {% if not current_user %}
         <li class="nav-item" role="presentation">
             <button class="nav-link active px-4" id="tab-verify-btn" data-bs-toggle="pill" data-bs-target="#tab-verify" type="button">
-                <i class="fa-solid fa-camera me-2"></i>Attendance Kiosk
+                <i class="fa-solid fa-camera me-2"></i>Student Check-In
             </button>
         </li>
-        {% if current_user %}
+        {% else %}
         <li class="nav-item" role="presentation">
-            <button class="nav-link px-4" id="tab-enroll-btn" data-bs-toggle="pill" data-bs-target="#tab-enroll" type="button" onclick="loadUsers()">
+            <button class="nav-link active px-4" id="tab-enroll-btn" data-bs-toggle="pill" data-bs-target="#tab-enroll" type="button" onclick="loadUsers()">
                 <i class="fa-solid fa-user-plus me-2"></i>Enroll Student
             </button>
         </li>
@@ -111,16 +118,21 @@
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link px-4" id="tab-audit-btn" data-bs-toggle="pill" data-bs-target="#tab-audit" type="button" onclick="loadAuditLogs()">
-                <i class="fa-solid fa-clock-rotate-left me-2"></i>Audit Logs
+                <i class="fa-solid fa-clock-rotate-left me-2"></i>Security Audit Logs
             </button>
         </li>
         {% endif %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4 text-secondary" id="tab-verify-btn" data-bs-toggle="pill" data-bs-target="#tab-verify" type="button">
+                <i class="fa-solid fa-desktop me-2"></i>Live Kiosk Preview
+            </button>
+        </li>
         {% endif %}
     </ul>
 
     <div class="tab-content" id="pills-tabContent">
         <!-- TAB 1: KIOSK LIVE VERIFICATION (PUBLIC) -->
-        <div class="tab-pane fade show active" id="tab-verify" role="tabpanel">
+        <div class="tab-pane fade {% if not current_user %}show active{% endif %}" id="tab-verify" role="tabpanel">
             <div class="row g-4">
                 <!-- Video Monitor Column -->
                 <div class="col-lg-7 text-center">
@@ -199,7 +211,7 @@
 
         {% if current_user %}
         <!-- TAB 2: STUDENT ENROLLMENT (TEACHER & ADMIN ONLY) -->
-        <div class="tab-pane fade" id="tab-enroll" role="tabpanel">
+        <div class="tab-pane fade show active" id="tab-enroll" role="tabpanel">
             <div class="row g-4">
                 <div class="col-lg-6">
                     <div class="card p-4 shadow-sm">
@@ -711,6 +723,12 @@
             tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Failed to load audit logs.</td></tr>';
         }
     }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        {% if current_user %}
+        loadUsers();
+        {% endif %}
+    });
 </script>
 </body>
 </html>

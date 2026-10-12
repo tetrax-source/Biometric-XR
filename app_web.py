@@ -59,13 +59,13 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=SESSION_TI
 # Initialize DB & Biometric Engines
 init_db()
 
-# Security Check: Warn if default admin/admin123 credentials are still active
+# Security Check: Ensure at least one administrator account exists in system_users
 try:
-    _admin_user = get_system_user("admin")
-    if _admin_user and check_password_hash(_admin_user.get("password_hash", ""), "admin123"):
+    _admin_users = [u for u in get_all_system_users() if u.get("role") == "admin"]
+    if not _admin_users:
         print("\n" + "!" * 70)
-        print("[SECURITY WARNING] Default credentials 'admin'/'admin123' are active!")
-        print("Please run 'python create_admin.py' to set a strong custom password.")
+        print("[NOTICE] No administrator accounts configured.")
+        print("Run 'python create_admin.py' to create an admin account.")
         print("!" * 70 + "\n")
 except Exception:
     pass
