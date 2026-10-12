@@ -485,6 +485,13 @@ def api_delete_user():
     if not verify_csrf():
         return jsonify({"success": False, "error": "CSRF validation failed."}), 400
 
+    # Role check: Teachers cannot delete students directly; requires admin role
+    if session['user']['role'] != 'admin':
+        return jsonify({
+            "success": False,
+            "error": "Permission denied: Only administrators can delete enrolled students. Please request administrator approval."
+        }), 403
+
     data = request.get_json() or {}
     name = data.get("name", "").strip()
     if not name:

@@ -551,16 +551,18 @@
                 document.getElementById('badgeStep2').innerText = 'Identified';
                 document.getElementById('faceStatus').innerText = `${state.userName} (${state.faceConf}%)`;
 
-                // Advance to Step 3: Spoken Code
+                // Advance to Step 3: Vocal Attendance Confirmation
                 state.step = 3;
-                state.challengeCode = "" + Math.floor(1000 + Math.random() * 9000);
-                document.getElementById('challengeCode').innerText = state.challengeCode.split('').join(' - ');
+                state.challengeCode = "PRESENT";
+                const challengeEl = document.getElementById('challengeCode');
+                if (challengeEl) {
+                    challengeEl.innerText = '"PRESENT"';
+                }
                 document.getElementById('voiceSection').classList.remove('d-none');
-                document.getElementById('voiceStatus').innerText = 'Speak the 4 digits clearly in order.';
-                document.getElementById('attemptText').innerText = `Attempt 1 of ${state.maxAttempts} (Single-use, expires in 60s)`;
+                document.getElementById('voiceStatus').innerText = 'Say "Present" clearly into the microphone.';
 
                 document.getElementById('resultBanner').className = 'alert alert-info mt-auto text-center fw-semibold py-3 m-0';
-                document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-microphone me-2"></i>Face Verified. Click 'Speak Code' to pronounce digits.`;
+                document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-microphone me-2"></i>Face Verified. Click 'Click to Say "Present"' to confirm.`;
             }, 1800);
 
         }, 2200);
@@ -595,7 +597,14 @@
         document.getElementById('heardDigits').innerText = 'Waiting for voice...';
 
         document.getElementById('resultBanner').className = 'alert alert-secondary mt-auto text-center fw-semibold py-3 m-0';
-        document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Ready`;
+        document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Reset - Look into camera and blink`;
+
+        // If camera stream is running, automatically resume liveness scanning
+        if (stream || document.getElementById('cameraCanvas').style.display === 'block') {
+            setTimeout(() => {
+                startPipeline();
+            }, 600);
+        }
     }
 
     // Step 3: Vocal Attendance Confirmation - Waits until user speaks "Present" into microphone
@@ -712,8 +721,24 @@
         alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
     }
 
-    // Role switcher
+    // Role switcher with secure login prompt simulation
     function switchRole(role) {
+        if (role === 'admin' && state.role !== 'admin') {
+            const pwd = prompt("Administrator Portal Access\nEnter admin password for 'kathir':", "");
+            if (pwd === null) return;
+            if (pwd.trim().length < 4) {
+                alert("Authentication failed: Invalid password.");
+                return;
+            }
+        } else if (role === 'teacher' && state.role === 'kiosk') {
+            const pwd = prompt("Faculty Portal Access\nEnter faculty password:", "");
+            if (pwd === null) return;
+            if (pwd.trim().length < 4) {
+                alert("Authentication failed: Invalid password.");
+                return;
+            }
+        }
+
         state.role = role;
         const badge = document.getElementById('navRoleBadge');
         const userMenuBtn = document.getElementById('userMenuBtn');
@@ -744,7 +769,7 @@
         } else {
             badge.className = 'badge bg-info-subtle text-info border border-info ms-1 fs-6';
             badge.innerHTML = '<i class="fa-solid fa-user-graduate me-1"></i>Student Attendance Kiosk';
-            userMenuBtn.innerHTML = '<i class="fa-solid fa-lock me-1"></i>Public Kiosk';
+            userMenuBtn.innerHTML = '<i class="fa-solid fa-lock me-1"></i>Sign In (Staff)';
             tabEnroll.style.display = 'none';
             tabLogs.style.display = 'none';
             tabAdmin.style.display = 'none';
@@ -812,9 +837,23 @@
     }
 
     function deleteUser(idx) {
-        if (confirm(`Remove enrolled templates for ${enrolledUsers[idx].name}?`)) {
+        const studentName = enrolledUsers[idx].name;
+        // Role check: Teachers cannot delete students directly; deletion requires Administrator privilege
+        if (state.role === 'teacher') {
+            alert(`[PERMISSION DENIED]\nTeachers cannot delete enrolled biometric profiles.\nStudent '${studentName}' requires Administrator approval to be removed.`);
+            return;
+        }
+
+        if (confirm(`[ADMIN CONFIRMATION]\nPermanently delete biometric face templates for student '${studentName}'?`)) {
             enrolledUsers.splice(idx, 1);
+            auditLogs.unshift({
+                timestamp: new Date().toISOString().replace('T', ' ').slice(0, 19),
+                username: "kathir (Admin)",
+                action: "DELETE_USER",
+                details: `Administrator deleted biometric profile for '${studentName}'`
+            });
             renderEnrolledUsers();
+            renderAuditLogs();
         }
     }
 
