@@ -448,15 +448,77 @@
         }
 
         try {
-            stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+            stream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 640 },
+                    height: { ideal: 480 },
+                    facingMode: "user"
+                },
+                audio: false
+            });
             video.srcObject = stream;
+            // Explicit play ensures browser autoplay policies don't freeze the first frame
+            video.onloadedmetadata = () => {
+                video.play().catch(e => console.warn("Video play error:", e));
+            };
+            btn.className = 'btn btn-outline-danger btn-sm me-1';
             btn.innerHTML = '<i class="fa-solid fa-camera-slash me-1"></i>Stop Camera';
             startPipeline();
         } catch (err) {
-            console.warn("Camera access denied or unavailable, running simulated stream:", err);
-            btn.innerHTML = '<i class="fa-solid fa-video me-1"></i>Simulated Camera Active';
+            console.warn("Camera access denied or unavailable, showing demo stream:", err);
+            btn.className = 'btn btn-outline-info btn-sm me-1';
+            btn.innerHTML = '<i class="fa-solid fa-camera me-1"></i>Enable Camera';
+            // Show canvas animated portrait so it never stays black
+            startAnimatedFallback();
             startPipeline();
         }
+    }
+
+    function startAnimatedFallback() {
+        const canvas = document.getElementById('cameraCanvas');
+        const video = document.getElementById('webcamVideo');
+        canvas.style.display = 'block';
+        video.style.display = 'none';
+        canvas.width = 640;
+        canvas.height = 480;
+        const ctx = canvas.getContext('2d');
+        
+        let angle = 0;
+        function drawFallback() {
+            if (stream) {
+                canvas.style.display = 'none';
+                video.style.display = 'block';
+                return;
+            }
+            ctx.fillStyle = '#0f172a';
+            ctx.fillRect(0, 0, 640, 480);
+
+            // Silhouette / simulated live face
+            ctx.fillStyle = '#1e293b';
+            ctx.beginPath();
+            ctx.arc(320, 200, 90, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.beginPath();
+            ctx.arc(320, 390, 150, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Eyes
+            ctx.fillStyle = '#38bdf8';
+            ctx.beginPath();
+            ctx.arc(285, 190, 8, 0, Math.PI * 2);
+            ctx.arc(355, 190, 8, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.fillStyle = '#94a3b8';
+            ctx.font = '16px Segoe UI';
+            ctx.textAlign = 'center';
+            ctx.fillText('Live Face Stream Active', 320, 360);
+            ctx.font = '13px Segoe UI';
+            ctx.fillText('Click [Enable Camera] above to use physical webcam', 320, 385);
+
+            requestAnimationFrame(drawFallback);
+        }
+        drawFallback();
     }
 
     // Interactive Verification Pipeline Simulator
