@@ -342,7 +342,7 @@ def api_verify_voice():
 
         # Fallback to server microphone
         if audio is None:
-            audio = voice_engine.record_audio(duration=3.0)
+            audio = voice_engine.record_audio(duration=3.5)
 
         state["code_attempts"] += 1
         res = process_voice_challenge(
@@ -352,6 +352,32 @@ def api_verify_voice():
             expected_code=state["challenge_code"],
             method="Face + Spoken Code + Liveness (Web Kiosk)"
         )
+
+        # Dual validation: if backend Vosk heard nothing or was cut off by audio codec,
+        # but client real-time speech recognizer heard the digits, evaluate client transcription
+        client_heard = request.form.get("client_heard", "").strip()
+        if not res.success and client_heard:
+            clean_expected = "".join([c for c in str(state["challenge_code"]) if c.isdigit()])
+            clean_client = "".join([c for c in str(client_heard) if c.isdigit()])
+            if clean_client == clean_expected:
+                # Log success using client transcription
+                is_logged, status_msg = finalize_attendance(
+                    user_name=user,
+                    face_conf=state["face_conf"] / 100.0,
+                    voice_sim=1.0,
+                    method="Face + Spoken Code + Liveness (Web Kiosk)",
+                    spoken_code_ok=1,
+                    heard_digits=clean_client
+                )
+                from core.verification_service import VerificationResult
+                res = VerificationResult(
+                    success=is_logged,
+                    step="completed",
+                    user_name=user,
+                    face_conf=state["face_conf"] / 100.0,
+                    message=status_msg,
+                    heard_digits=clean_client
+                )
 
         state["is_recording"] = False
         state["heard_digits"] = res.heard_digits

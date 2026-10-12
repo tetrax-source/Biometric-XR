@@ -539,49 +539,59 @@
         document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Ready`;
     }
 
-    // Step 3 Voice Recording & Verification
+    // Step 3 Voice Recording & Verification with Real-Time Streaming Digit Feedback
     async function recordVoice() {
         if (state.step !== 3) return;
         const btn = document.getElementById('btnRecordVoice');
+        const heardEl = document.getElementById('heardDigits');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening (3s)...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... speak now';
 
-        setTimeout(() => {
-            // Heard digits matching expected code
-            state.heardDigits = state.challengeCode;
-            document.getElementById('heardDigits').innerText = state.heardDigits.split('').join(' ');
-            btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
+        // Simulate real-time digit-by-digit streaming display as user speaks each number
+        const digits = state.challengeCode.split('');
+        heardEl.innerText = "";
+        
+        let i = 0;
+        const interval = setInterval(() => {
+            if (i < digits.length) {
+                heardEl.innerText = digits.slice(0, i + 1).join(' ');
+                i++;
+            } else {
+                clearInterval(interval);
+                state.heardDigits = state.challengeCode;
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
 
-            // Step 4: Attendance Marked Success
-            state.step = 4;
-            const now = new Date();
-            const timeStr = now.toTimeString().split(' ')[0];
-            const dateStr = now.toISOString().split('T')[0];
+                // Step 4: Attendance Marked Success
+                state.step = 4;
+                const now = new Date();
+                const timeStr = now.toTimeString().split(' ')[0];
+                const dateStr = now.toISOString().split('T')[0];
 
-            attendanceLogs.unshift({
-                name: state.userName,
-                date: dateStr,
-                time: timeStr,
-                method: "Face + Spoken Code + Liveness",
-                face_conf: state.faceConf / 100.0,
-                heard_digits: state.heardDigits,
-                status: "VERIFIED"
-            });
+                attendanceLogs.unshift({
+                    name: state.userName,
+                    date: dateStr,
+                    time: timeStr,
+                    method: "Face + Spoken Code + Liveness",
+                    face_conf: state.faceConf / 100.0,
+                    heard_digits: state.heardDigits,
+                    status: "VERIFIED"
+                });
 
-            auditLogs.unshift({
-                timestamp: `${dateStr} ${timeStr}`,
-                username: state.userName,
-                action: "ATTENDANCE_SUCCESS",
-                details: `Method: Face + Spoken Code + Liveness | Spoken digits: '${state.heardDigits}' (OK=1)`
-            });
+                auditLogs.unshift({
+                    timestamp: `${dateStr} ${timeStr}`,
+                    username: state.userName,
+                    action: "ATTENDANCE_SUCCESS",
+                    details: `Method: Face + Spoken Code + Liveness | Spoken digits: '${state.heardDigits}' (OK=1)`
+                });
 
-            renderLogs();
-            renderAuditLogs();
+                renderLogs();
+                renderAuditLogs();
 
-            document.getElementById('resultBanner').className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
-            document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
-        }, 2500);
+                document.getElementById('resultBanner').className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+                document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
+            }
+        }, 600);
     }
 
     // Role switcher

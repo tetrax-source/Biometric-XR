@@ -452,15 +452,61 @@
         pollStatus();
     }
 
+    let realTimeRec = null;
+
     async function recordVoice() {
         const btn = document.getElementById('btnRecordVoice');
+        const heardEl = document.getElementById('heardDigits');
+        const alertBox = document.getElementById('resultBanner');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Recording audio (3s)...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... speak digits now';
+
+        let liveDigitsHeard = "";
+        const wordMap = {
+            "zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3",
+            "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9"
+        };
+
+        // 1. REAL-TIME INSTANT FEEDBACK using browser Web Speech API if supported
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRec) {
+            try {
+                realTimeRec = new SpeechRec();
+                realTimeRec.continuous = true;
+                realTimeRec.interimResults = true;
+                realTimeRec.lang = 'en-US';
+
+                realTimeRec.onresult = (event) => {
+                    let transcript = "";
+                    for (let i = 0; i < event.results.length; ++i) {
+                        transcript += event.results[i][0].transcript + " ";
+                    }
+                    const words = transcript.toLowerCase().trim().split(/\s+/);
+                    let detected = [];
+                    words.forEach(w => {
+                        if (wordMap[w]) detected.push(wordMap[w]);
+                        else {
+                            // Also check if raw numbers like "4", "5" were returned
+                            for (let ch of w) {
+                                if (ch >= '0' && ch <= '9') detected.push(ch);
+                            }
+                        }
+                    });
+                    if (detected.length > 0) {
+                        liveDigitsHeard = detected.join('');
+                        heardEl.innerText = detected.join(' ');
+                    }
+                };
+                realTimeRec.start();
+            } catch (srErr) {
+                console.warn("Real-time Web Speech recognition:", srErr);
+            }
+        }
 
         try {
             let formData = new FormData();
 
-            // Attempt browser-side audio capture if supported
+            // 2. Audio recording for backend Vosk processing
             if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 try {
                     const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -477,7 +523,8 @@
                     });
 
                     mediaRecorder.start();
-                    await new Promise(r => setTimeout(r, 3000));
+                    // Give 3.5 seconds to comfortably pronounce all 4 digits
+                    await new Promise(r => setTimeout(r, 3500));
                     mediaRecorder.stop();
                     const audioBlob = await recordPromise;
                     formData.append('audio', audioBlob, 'mic_recording.webm');
@@ -486,21 +533,41 @@
                 }
             }
 
+            if (realTimeRec) {
+                try { realTimeRec.stop(); } catch (_) {}
+            }
+
+            // Append live digits heard from client as assistant payload
+            if (liveDigitsHeard) {
+                formData.append('client_heard', liveDigitsHeard);
+            }
+
             const res = await fetch('/api/verify_voice', {
                 method: 'POST',
                 body: formData
             });
             const data = await res.json();
+            
+            if (data.heard) {
+                heardEl.innerText = data.heard.split('').join(' ');
+            }
+
             if (data.success) {
+                alertBox.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+                alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>${data.message}`;
                 pollStatus();
             } else {
-                alert(data.error || data.message);
+                alertBox.className = 'alert alert-warning mt-auto text-center fw-semibold py-3 m-0';
+                alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>${data.message || data.error}`;
+                pollStatus();
             }
         } catch (e) {
-            alert('Voice recording failed: ' + e);
+            console.error('Voice verification error:', e);
+            alertBox.className = 'alert alert-danger mt-auto text-center fw-semibold py-3 m-0';
+            alertBox.innerHTML = `<i class="fa-solid fa-circle-xmark me-2"></i>Voice recording error: ${e}`;
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
+            btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3.5s)';
         }
     }
 
