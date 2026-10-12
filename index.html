@@ -601,59 +601,153 @@
         document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Ready`;
     }
 
-    // Step 3 Voice Recording & Verification with Real-Time Streaming Digit Feedback
+    // Step 3 Voice Recording & Verification with Real Microphone Speech Recognition
     async function recordVoice() {
         if (state.step !== 3) return;
         const btn = document.getElementById('btnRecordVoice');
         const heardEl = document.getElementById('heardDigits');
+        const alertBox = document.getElementById('resultBanner');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... speak now';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Listening... speak numbers into mic';
+        heardEl.innerText = "Listening...";
 
-        // Simulate real-time digit-by-digit streaming display as user speaks each number
-        const digits = state.challengeCode.split('');
-        heardEl.innerText = "";
-        
-        let i = 0;
-        const interval = setInterval(() => {
-            if (i < digits.length) {
-                heardEl.innerText = digits.slice(0, i + 1).join(' ');
-                i++;
-            } else {
-                clearInterval(interval);
-                state.heardDigits = state.challengeCode;
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
+        const wordMap = {
+            "zero": "0", "oh": "0", "one": "1", "two": "2", "three": "3",
+            "four": "4", "five": "5", "six": "6", "seven": "7", "eight": "8", "nine": "9"
+        };
 
-                // Step 4: Attendance Marked Success
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+        if (SpeechRec) {
+            try {
+                const rec = new SpeechRec();
+                rec.continuous = true;
+                rec.interimResults = true;
+                rec.lang = 'en-US';
+
+                let finalSpokenDigits = "";
+
+                rec.onresult = (event) => {
+                    let transcript = "";
+                    for (let i = 0; i < event.results.length; ++i) {
+                        transcript += event.results[i][0].transcript + " ";
+                    }
+                    const words = transcript.toLowerCase().trim().split(/\s+/);
+                    let detected = [];
+                    words.forEach(w => {
+                        if (wordMap[w]) detected.push(wordMap[w]);
+                        else {
+                            for (let ch of w) {
+                                if (ch >= '0' && ch <= '9') detected.push(ch);
+                            }
+                        }
+                    });
+
+                    if (detected.length > 0) {
+                        finalSpokenDigits = detected.join('');
+                        heardEl.innerText = detected.join(' ');
+                    }
+                };
+
+                rec.onerror = (e) => {
+                    console.warn("Speech recognition error:", e);
+                };
+
+                rec.start();
+
+                // Listen for 3.5 seconds to capture speech from microphone
+                setTimeout(() => {
+                    try { rec.stop(); } catch (_) {}
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
+
+                    const cleanExpected = state.challengeCode.trim();
+                    if (finalSpokenDigits === cleanExpected) {
+                        // Success!
+                        state.step = 4;
+                        const now = new Date();
+                        const timeStr = now.toTimeString().split(' ')[0];
+                        const dateStr = now.toISOString().split('T')[0];
+
+                        attendanceLogs.unshift({
+                            name: state.userName,
+                            date: dateStr,
+                            time: timeStr,
+                            method: "Face + Spoken Code + Liveness",
+                            face_conf: state.faceConf / 100.0,
+                            heard_digits: finalSpokenDigits,
+                            status: "VERIFIED"
+                        });
+
+                        auditLogs.unshift({
+                            timestamp: `${dateStr} ${timeStr}`,
+                            username: state.userName,
+                            action: "ATTENDANCE_SUCCESS",
+                            details: `Method: Face + Spoken Code + Liveness | Spoken: '${finalSpokenDigits}' (OK=1)`
+                        });
+
+                        renderLogs();
+                        renderAuditLogs();
+
+                        alertBox.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+                        alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
+                    } else {
+                        // Mismatch or empty
+                        state.attempts++;
+                        const heardDisplay = finalSpokenDigits ? finalSpokenDigits.split('').join(' ') : '(none)';
+                        const expectedDisplay = cleanExpected.split('').join(' ');
+
+                        if (state.attempts >= state.maxAttempts) {
+                            alertBox.className = 'alert alert-danger mt-auto text-center fw-semibold py-3 m-0';
+                            alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Heard ${heardDisplay}, expected ${expectedDisplay}. Exceeded 3 attempts. Restarting from Step 1.`;
+                            setTimeout(resetPipeline, 2000);
+                        } else {
+                            // Issue new single-use code for next attempt
+                            state.challengeCode = "" + Math.floor(1000 + Math.random() * 9000);
+                            document.getElementById('challengeCode').innerText = state.challengeCode.split('').join(' - ');
+                            document.getElementById('attemptText').innerText = `Attempt ${state.attempts + 1} of ${state.maxAttempts} (Single-use, expires in 60s)`;
+                            alertBox.className = 'alert alert-warning mt-auto text-center fw-semibold py-3 m-0';
+                            alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Heard ${heardDisplay}, expected ${expectedDisplay}. New code issued!`;
+                        }
+                    }
+                }, 3500);
+
+                return;
+            } catch (err) {
+                console.warn("Web Speech API failed, using fallback prompt:", err);
+            }
+        }
+
+        // Fallback for browsers without Web Speech: prompt to enter or test
+        const manual = prompt(`Speak or enter the 4 digits shown on screen (${state.challengeCode}):`, "");
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)';
+
+        if (manual !== null) {
+            const cleanManual = manual.replace(/\D/g, '');
+            heardEl.innerText = cleanManual ? cleanManual.split('').join(' ') : '(none)';
+            if (cleanManual === state.challengeCode) {
                 state.step = 4;
                 const now = new Date();
                 const timeStr = now.toTimeString().split(' ')[0];
                 const dateStr = now.toISOString().split('T')[0];
-
                 attendanceLogs.unshift({
                     name: state.userName,
                     date: dateStr,
                     time: timeStr,
                     method: "Face + Spoken Code + Liveness",
                     face_conf: state.faceConf / 100.0,
-                    heard_digits: state.heardDigits,
+                    heard_digits: cleanManual,
                     status: "VERIFIED"
                 });
-
-                auditLogs.unshift({
-                    timestamp: `${dateStr} ${timeStr}`,
-                    username: state.userName,
-                    action: "ATTENDANCE_SUCCESS",
-                    details: `Method: Face + Spoken Code + Liveness | Spoken digits: '${state.heardDigits}' (OK=1)`
-                });
-
                 renderLogs();
-                renderAuditLogs();
-
-                document.getElementById('resultBanner').className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
-                document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
+                alertBox.className = 'alert alert-success mt-auto text-center fw-bold py-3 m-0';
+                alertBox.innerHTML = `<i class="fa-solid fa-circle-check me-2"></i>Attendance marked for ${state.userName} at ${timeStr}`;
+            } else {
+                alertBox.className = 'alert alert-warning mt-auto text-center fw-semibold py-3 m-0';
+                alertBox.innerHTML = `<i class="fa-solid fa-triangle-exclamation me-2"></i>Mismatched digits. Please try again.`;
             }
-        }, 600);
+        }
     }
 
     // Role switcher
