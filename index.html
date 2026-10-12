@@ -519,28 +519,52 @@
     }
 
     // Interactive Verification Pipeline Simulator
-    let pipelineTimer = null;
-    function startPipeline() {
-        if (state.pipelineRunning) return;
-        state.pipelineRunning = true;
-        resetPipeline();
+    let pipelineTimer1 = null;
+    let pipelineTimer2 = null;
 
-        // Step 1: Liveness Simulation (Blink detection in 2 seconds)
-        pipelineTimer = setTimeout(() => {
-            state.ear = 0.18;
+    function startPipeline() {
+        // Clear any old pending timers
+        if (pipelineTimer1) clearTimeout(pipelineTimer1);
+        if (pipelineTimer2) clearTimeout(pipelineTimer2);
+
+        state.step = 1;
+        state.blinkCount = 0;
+        state.livenessPassed = false;
+        state.heardDigits = "";
+        state.attempts = 0;
+
+        document.getElementById('badgeStep1').className = 'badge bg-warning text-dark step-badge';
+        document.getElementById('badgeStep1').innerText = 'Detecting...';
+        document.getElementById('earStatus').innerText = 'Tracking EAR: 0.28 | Blink your eyes naturally...';
+
+        document.getElementById('badgeStep2').className = 'badge bg-secondary step-badge';
+        document.getElementById('badgeStep2').innerText = 'Locked';
+        document.getElementById('faceStatus').innerText = 'Locked (Requires Step 1)';
+
+        document.getElementById('faceOverlay').classList.remove('detected');
+        document.getElementById('faceTag').style.display = 'none';
+
+        document.getElementById('voiceSection').classList.add('d-none');
+        document.getElementById('voiceStatus').innerText = 'Locked (Requires Step 2)';
+        document.getElementById('resultBanner').className = 'alert alert-secondary mt-auto text-center fw-semibold py-3 m-0';
+        document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>Looking into camera: Blink naturally to begin`;
+
+        // Step 1: Liveness detection triggers after 2 seconds of looking at camera
+        pipelineTimer1 = setTimeout(() => {
+            state.ear = 0.17;
             state.blinkCount = 1;
             state.livenessPassed = true;
             document.getElementById('badgeStep1').className = 'badge bg-success step-badge';
             document.getElementById('badgeStep1').innerText = 'Passed';
-            document.getElementById('earStatus').innerText = `Blinks: 1/1 | EAR: 0.18 (Blink Verified)`;
+            document.getElementById('earStatus').innerText = `Blinks: 1/1 | EAR: 0.17 (Blink Verified!)`;
             
-            // Advance to Step 2
+            // Advance to Step 2: Scanning Face
             state.step = 2;
             document.getElementById('badgeStep2').className = 'badge bg-warning text-dark step-badge';
-            document.getElementById('badgeStep2').innerText = 'Scanning';
+            document.getElementById('badgeStep2').innerText = 'Scanning...';
             document.getElementById('faceStatus').innerText = 'Matching face against enrolled templates...';
 
-            setTimeout(() => {
+            pipelineTimer2 = setTimeout(() => {
                 // Face recognized!
                 const overlay = document.getElementById('faceOverlay');
                 const tag = document.getElementById('faceTag');
@@ -551,7 +575,7 @@
                 document.getElementById('badgeStep2').innerText = 'Identified';
                 document.getElementById('faceStatus').innerText = `${state.userName} (${state.faceConf}%)`;
 
-                // Advance to Step 3: Vocal Attendance Confirmation
+                // Advance to Step 3: Vocal Confirmation
                 state.step = 3;
                 state.challengeCode = "PRESENT";
                 const challengeEl = document.getElementById('challengeCode');
@@ -569,42 +593,13 @@
     }
 
     function stopPipeline() {
-        if (pipelineTimer) clearTimeout(pipelineTimer);
-        state.pipelineRunning = false;
+        if (pipelineTimer1) clearTimeout(pipelineTimer1);
+        if (pipelineTimer2) clearTimeout(pipelineTimer2);
     }
 
     function resetPipeline() {
         stopPipeline();
-        state.step = 1;
-        state.blinkCount = 0;
-        state.livenessPassed = false;
-        state.heardDigits = "";
-        state.attempts = 0;
-
-        document.getElementById('badgeStep1').className = 'badge bg-secondary step-badge';
-        document.getElementById('badgeStep1').innerText = 'Waiting';
-        document.getElementById('earStatus').innerText = 'Tracking EAR & eye blinks...';
-
-        document.getElementById('badgeStep2').className = 'badge bg-secondary step-badge';
-        document.getElementById('badgeStep2').innerText = 'Locked';
-        document.getElementById('faceStatus').innerText = 'Locked (Requires Step 1)';
-
-        document.getElementById('faceOverlay').classList.remove('detected');
-        document.getElementById('faceTag').style.display = 'none';
-
-        document.getElementById('voiceSection').classList.add('d-none');
-        document.getElementById('voiceStatus').innerText = 'Locked (Requires Step 2)';
-        document.getElementById('heardDigits').innerText = 'Waiting for voice...';
-
-        document.getElementById('resultBanner').className = 'alert alert-secondary mt-auto text-center fw-semibold py-3 m-0';
-        document.getElementById('resultBanner').innerHTML = `<i class="fa-solid fa-hourglass-start me-2"></i>System Reset - Look into camera and blink`;
-
-        // If camera stream is running, automatically resume liveness scanning
-        if (stream || document.getElementById('cameraCanvas').style.display === 'block') {
-            setTimeout(() => {
-                startPipeline();
-            }, 600);
-        }
+        startPipeline();
     }
 
     // Step 3: Vocal Attendance Confirmation - Waits until user speaks "Present" into microphone

@@ -27,3 +27,6 @@ models/
 Thumbs.db
 Desktop.ini
 .DS_Store
+
+# Temporary exports
+*.csv
