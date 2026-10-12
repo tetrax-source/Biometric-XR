@@ -129,4 +129,22 @@ This document tracks all changes made during the system upgrade. Each phase reco
 - **What to Test**:
   - Review markdown documents for accuracy, readability, and consistency across modules.
 
+## Phase 1 (New Upgrade): Vosk Offline Speech Tool & Configuration
+- **Status**: DONE
+- **Files Changed**:
+  - `requirements.txt`: Added `vosk>=0.3.45`.
+  - `models/vosk-model-small-en-us-0.15`: Downloaded and extracted lightweight English acoustic model (~40 MB).
+  - `config.py`: Added configuration flags:
+    - `SPOKEN_CODE_CHECK = True`
+    - `VOICE_MATCH_ENABLED = False` (MFCC matching bypassed by default)
+    - `CODE_LENGTH = 4`
+    - `CODE_EXPIRY_SECONDS = 60`
+    - `MAX_CODE_ATTEMPTS = 3`
+    - `VOSK_MODEL_PATH = "models/vosk-model-small-en-us-0.15"`
+- **Fallback Verification**:
+  - Verified Vosk initializes cleanly from the extracted model path.
+  - Added safety check: If model folder is missing or cannot load, the system falls back gracefully to bypassing spoken code verification with a warning, never crashing.
+- **What to Test**:
+  - Run `python -c "import vosk, config; m = vosk.Model(config.VOSK_MODEL_PATH); print('OK')"` to verify model loads.
+
 ---

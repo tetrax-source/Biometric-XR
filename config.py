@@ -23,11 +23,18 @@ VOICE_THRESHOLD = float(os.environ.get("VOICE_THRESHOLD", 0.50))  # Minimum cosi
 EAR_THRESHOLD = float(os.environ.get("EAR_THRESHOLD", 0.22))      # Eye Aspect Ratio threshold for blink detection
 REQUIRED_BLINKS = int(os.environ.get("REQUIRED_BLINKS", 1))       # Number of blinks required for liveness
 
-# Audio settings
+# Audio & Speech Recognition Settings
 AUDIO_SAMPLE_RATE = 16000
 AUDIO_DURATION = 3.0  # seconds
 MIN_AUDIO_RMS = 0.005  # Energy threshold to reject silence
 USE_BROWSER_AUDIO = os.environ.get("USE_BROWSER_AUDIO", "True").lower() in ("true", "1")
+
+# Spoken 4-Digit Challenge & Speaker Verification Flags
+SPOKEN_CODE_CHECK = os.environ.get("SPOKEN_CODE_CHECK", "True").lower() in ("true", "1")
+VOICE_MATCH_ENABLED = os.environ.get("VOICE_MATCH_ENABLED", "False").lower() in ("true", "1")
+CODE_LENGTH = int(os.environ.get("CODE_LENGTH", 4))
+CODE_EXPIRY_SECONDS = int(os.environ.get("CODE_EXPIRY_SECONDS", 60))
+MAX_CODE_ATTEMPTS = int(os.environ.get("MAX_CODE_ATTEMPTS", 3))
 
 # Security and Session
 SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-biometric-key-2026-viva")
@@ -35,6 +42,8 @@ SESSION_TIMEOUT_MINUTES = int(os.environ.get("SESSION_TIMEOUT_MINUTES", 30))
 
 # Model & data paths
 DATA_DIR = os.path.join(BASE_DIR, "data")
+MODELS_DIR = os.path.join(BASE_DIR, "models")
+VOSK_MODEL_PATH = os.environ.get("VOSK_MODEL_PATH", os.path.join(MODELS_DIR, "vosk-model-small-en-us-0.15"))
 FACE_LANDMARKER_PATH = os.path.join(DATA_DIR, "face_landmarker.task")
 HAAR_FACE_PATH = os.path.join(DATA_DIR, "haarcascade_frontalface_default.xml")
 HAAR_EYE_PATH = os.path.join(DATA_DIR, "haarcascade_eye.xml")

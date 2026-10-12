@@ -13,3 +13,4 @@ Flask>=3.0.0
 Werkzeug>=3.0.0
 pytest>=8.0.0
 matplotlib>=3.8.0
+vosk>=0.3.45
