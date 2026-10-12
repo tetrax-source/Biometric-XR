@@ -28,12 +28,12 @@ def main():
             print("Cancelled.")
             sys.exit(0)
 
-    password = getpass.getpass("Enter password: ")
+    password = input("Enter password: ").strip()
     if len(password) < 6:
         print("[!] Error: Password must be at least 6 characters long.")
         sys.exit(1)
 
-    password_confirm = getpass.getpass("Confirm password: ")
+    password_confirm = input("Confirm password: ").strip()
     if password != password_confirm:
         print("[!] Error: Passwords do not match.")
         sys.exit(1)
