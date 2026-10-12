@@ -342,7 +342,7 @@ class BiometricAttendanceApp(ctk.CTk):
                     code = self.voice_engine.generate_challenge_code()
                     self.current_challenge_code = code
                     self.lbl_voice_status.configure(
-                        text="Press 'Speak' & say verification code:",
+                        text="Press 'Speak' & speak prompt for acoustic matching:",
                         text_color="#ffb300"
                     )
                     self.lbl_voice_prompt.configure(text=f"Speak:  \"{code}\"")

@@ -87,4 +87,21 @@ This document tracks all changes made during the system upgrade. Each phase reco
 - **What to Test**:
   - Ran `python -m pytest tests/ -v`: All 17 tests passed (100% success rate).
 
+## Phase 7: Voice Challenge Speech-to-Text Integration
+- **Status**: SKIPPED (Offline STT package and model not installed; zero download rule observed)
+- **Reason**:
+  - Checked for offline speech-to-text libraries (`vosk`, `whisper`, `speech_recognition`, `pocketsphinx`, `torch`); none are currently installed.
+  - In adherence to the strict "no large downloads / unstable internet" constraint, external model bundle downloads were bypassed.
+- **Files Changed**:
+  - `app_web.py`: Updated voice verification status text from "Speak verification code below" to "Speak prompt into microphone for voice biometric matching" so the UI does not falsely claim semantic digit verification.
+  - `templates/index.html`: Updated UI label to "Speak this prompt into microphone (MFCC acoustic matching)".
+  - `app_gui.py`: Updated UI label to "Press 'Speak' & speak prompt for acoustic matching".
+- **Instructions for Future Installation**:
+  To add semantic 4-digit spoken challenge transcription later:
+  1. Install Vosk: `pip install vosk`
+  2. Download the lightweight offline model (~40 MB):
+     URL: `https://alphacephei.com/vosk/models/vosk-model-small-en-us-0.15.zip`
+  3. Extract to: `E:\Aswin\data\vosk-model`
+  4. In `core/voice_engine.py`, load `vosk.Model("data/vosk-model")` and check `json.loads(rec.Result())['text']` against `challenge_code`.
+
 ---

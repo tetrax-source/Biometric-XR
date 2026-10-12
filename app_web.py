@@ -202,7 +202,7 @@ def generate_video_stream():
                 state["step"] = 3
                 code = voice_engine.generate_challenge_code()
                 state["challenge_code"] = code
-                state["voice_status"] = f"Face identified as {name}. Speak verification code below."
+                state["voice_status"] = f"Face identified as {name}. Speak prompt into microphone for voice biometric matching."
                 state["result_message"] = f"Face recognized ({state['face_conf']}%). Complete voice verification."
             elif name == "Unknown":
                 state["result_message"] = "Face not recognized in database."
