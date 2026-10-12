@@ -450,7 +450,7 @@ class BiometricAttendanceApp(ctk.CTk):
         lbl_name = ctk.CTkLabel(left, text="Full Name / User ID:", font=ctk.CTkFont(weight="bold"))
         lbl_name.pack(anchor="w", pady=(0, 5))
 
-        self.entry_enroll_name = ctk.CTkEntry(left, placeholder_text="e.g. ASWIN", height=40, font=ctk.CTkFont(size=14))
+        self.entry_enroll_name = ctk.CTkEntry(left, placeholder_text="e.g. STUDENT_NAME", height=40, font=ctk.CTkFont(size=14))
         self.entry_enroll_name.pack(fill="x", pady=(0, 20))
 
         # Face enrollment card (Face-Only enrollment)
