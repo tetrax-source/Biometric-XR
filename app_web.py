@@ -1,7 +1,13 @@
 """
 app_web.py
 Flask Web Application for Multi-Modal Biometric Attendance System.
-Runs on http://localhost:5000 / http://127.0.0.1:5000.
+Supports:
+- Public Kiosk Mode (Liveness -> Face -> Voice check-in)
+- Role-Based Access Control (Admin and Teacher roles)
+- Faculty & Admin Login / Logout with password hashing (werkzeug.security)
+- Session inactivity timeout (30 minutes)
+- CSRF protection for authenticated mutations
+- Comprehensive Audit Logging for all administrative actions
 """
 
 import os
@@ -12,17 +18,25 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8")
 
 import time
+import secrets
 import threading
 import datetime
+from functools import wraps
 import cv2
 import numpy as np
-from flask import Flask, render_template, Response, jsonify, request, send_file
+from flask import (
+    Flask, render_template, Response, jsonify, request,
+    session, redirect, url_for, send_file
+)
+from werkzeug.security import check_password_hash, generate_password_hash
 
 # Core modules
 from core.database import (
     init_db, add_or_get_user, save_face_embedding, save_voice_embedding,
-    get_all_face_embeddings, get_voice_embedding, get_all_users,
-    record_attendance, get_attendance_logs, export_attendance_to_csv
+    get_all_face_embeddings, get_voice_embedding, get_all_users, delete_user,
+    record_attendance, get_attendance_logs, export_attendance_to_csv,
+    get_system_user, create_system_user, get_all_system_users,
+    log_audit, get_audit_logs
 )
 from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
@@ -31,11 +45,13 @@ from core.verification_service import finalize_attendance
 
 from config import (
     CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
-    EAR_THRESHOLD, REQUIRED_BLINKS, SECRET_KEY
+    EAR_THRESHOLD, REQUIRED_BLINKS, SECRET_KEY,
+    SESSION_TIMEOUT_MINUTES
 )
 
 app = Flask(__name__)
 app.secret_key = SECRET_KEY
+app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=SESSION_TIMEOUT_MINUTES)
 
 # Initialize DB & Biometric Engines
 init_db()
@@ -87,6 +103,66 @@ def reload_enrolled():
     global enrolled_faces
     enrolled_faces = get_all_face_embeddings()
 
+# ----------------- SECURITY & SESSION HELPERS -----------------
+
+@app.before_request
+def check_session_timeout():
+    session.permanent = True
+    now = time.time()
+    
+    # Check inactivity timeout for authenticated sessions
+    if 'user' in session:
+        last_activity = session.get('last_activity')
+        timeout_seconds = SESSION_TIMEOUT_MINUTES * 60
+        if last_activity and (now - last_activity > timeout_seconds):
+            username = session['user'].get('username')
+            log_audit(username, "SESSION_TIMEOUT", "Session expired due to 30 minutes of inactivity.")
+            session.clear()
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Session expired due to inactivity. Please log in again."}), 401
+            return redirect(url_for('login'))
+        session['last_activity'] = now
+
+    # Ensure CSRF token exists
+    if 'csrf_token' not in session:
+        session['csrf_token'] = secrets.token_hex(16)
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "Authentication required. Please log in."}), 401
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+def role_required(allowed_roles):
+    def decorator(f):
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            if 'user' not in session:
+                if request.path.startswith('/api/'):
+                    return jsonify({"error": "Authentication required."}), 401
+                return redirect(url_for('login'))
+            user_role = session['user'].get('role')
+            if user_role not in allowed_roles:
+                if request.path.startswith('/api/'):
+                    return jsonify({"error": "Forbidden: Insufficient privileges."}), 403
+                return render_template('index.html', error="Access Denied: Insufficient permissions.", current_user=session['user'], csrf_token=session.get('csrf_token'))
+            return f(*args, **kwargs)
+        return decorated_function
+    return decorator
+
+def verify_csrf():
+    token = request.headers.get('X-CSRF-Token') or request.form.get('csrf_token')
+    expected = session.get('csrf_token')
+    if not token or not expected or not secrets.compare_digest(str(token), str(expected)):
+        return False
+    return True
+
+# ----------------- VIDEO STREAMING GENERATOR -----------------
+
 def generate_video_stream():
     global camera, state, enrolled_faces
     cap = get_camera()
@@ -126,7 +202,7 @@ def generate_video_stream():
                 state["step"] = 3
                 code = voice_engine.generate_challenge_code()
                 state["challenge_code"] = code
-                state["voice_status"] = f"Face identified as {name}. Speak the challenge code below."
+                state["voice_status"] = f"Face identified as {name}. Speak verification code below."
                 state["result_message"] = f"Face recognized ({state['face_conf']}%). Complete voice verification."
             elif name == "Unknown":
                 state["result_message"] = "Face not recognized in database."
@@ -140,15 +216,51 @@ def generate_video_stream():
                b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
         time.sleep(0.03)
 
-# ----------------- WEB ROUTES -----------------
+# ----------------- WEB PAGES & AUTH ROUTES -----------------
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    current_user = session.get('user')
+    return render_template('index.html', current_user=current_user, csrf_token=session.get('csrf_token'))
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        if not verify_csrf():
+            return render_template('login.html', error="Invalid CSRF token.", csrf_token=session.get('csrf_token')), 400
+
+        username = request.form.get('username', '').strip().lower()
+        password = request.form.get('password', '')
+
+        user = get_system_user(username)
+        if user and check_password_hash(user['password_hash'], password):
+            session['user'] = {
+                'id': user['id'],
+                'username': user['username'],
+                'role': user['role']
+            }
+            session['last_activity'] = time.time()
+            log_audit(username, "LOGIN_SUCCESS", f"User {username} logged in with role {user['role']}.")
+            return redirect(url_for('index'))
+        else:
+            log_audit(username, "LOGIN_FAILED", f"Failed login attempt for username {username}.")
+            return render_template('login.html', error="Invalid username or password.", csrf_token=session.get('csrf_token'))
+
+    return render_template('login.html', csrf_token=session.get('csrf_token'))
+
+@app.route('/logout')
+def logout():
+    user = session.get('user')
+    if user:
+        log_audit(user['username'], "LOGOUT", f"User {user['username']} logged out.")
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route('/video_feed')
 def video_feed():
     return Response(generate_video_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# ----------------- KIOSK VERIFICATION ENDPOINTS (OPEN) -----------------
 
 @app.route('/api/status')
 def api_status():
@@ -208,8 +320,14 @@ def api_verify_voice():
         state["is_recording"] = False
         return jsonify({"success": False, "error": str(e)})
 
+# ----------------- PROTECTED MANAGEMENT ENDPOINTS (LOGIN REQUIRED) -----------------
+
 @app.route('/api/enroll', methods=['POST'])
+@login_required
 def api_enroll():
+    if not verify_csrf():
+        return jsonify({"success": False, "error": "CSRF validation failed."}), 400
+
     data = request.get_json() or {}
     name = data.get("name", "").strip().upper().replace(" ", "_")
     if not name:
@@ -218,7 +336,6 @@ def api_enroll():
     cap = get_camera()
     captured_faces = 0
 
-    # Capture 5 face frames
     with camera_lock:
         start_time = time.time()
         while captured_faces < 5 and (time.time() - start_time < 8):
@@ -249,27 +366,91 @@ def api_enroll():
         pass
 
     reload_enrolled()
+    actor = session['user']['username']
+    log_audit(actor, "ENROLL_USER", f"Enrolled student '{name}' with {captured_faces} face templates.")
+
     return jsonify({
         "success": True,
         "message": f"Successfully enrolled {name} ({captured_faces} face templates saved)."
     })
 
+@app.route('/api/delete_user', methods=['POST'])
+@login_required
+def api_delete_user():
+    if not verify_csrf():
+        return jsonify({"success": False, "error": "CSRF validation failed."}), 400
+
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"success": False, "error": "Name is required."})
+
+    ok = delete_user(name)
+    reload_enrolled()
+    actor = session['user']['username']
+    log_audit(actor, "DELETE_USER", f"Deleted user '{name}'.")
+    return jsonify({"success": ok, "message": f"User {name} deleted." if ok else "User not found."})
+
 @app.route('/api/logs')
+@login_required
 def api_logs():
     logs = get_attendance_logs()
     return jsonify({"logs": logs})
 
 @app.route('/api/users')
+@login_required
 def api_users():
     users = get_all_users()
     return jsonify({"users": users})
 
 @app.route('/api/export_csv')
+@login_required
 def api_export_csv():
+    actor = session['user']['username']
+    log_audit(actor, "EXPORT_CSV", "Exported attendance records to CSV.")
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     export_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), f"attendance_export_{today}.csv")
     export_attendance_to_csv(export_path)
     return send_file(export_path, as_attachment=True, download_name=f"attendance_{today}.csv")
+
+# ----------------- ADMIN ONLY ENDPOINTS -----------------
+
+@app.route('/api/teachers')
+@role_required(['admin'])
+def api_teachers():
+    teachers = get_all_system_users()
+    return jsonify({"users": teachers})
+
+@app.route('/api/create_teacher', methods=['POST'])
+@role_required(['admin'])
+def api_create_teacher():
+    if not verify_csrf():
+        return jsonify({"success": False, "error": "CSRF validation failed."}), 400
+
+    data = request.get_json() or {}
+    username = data.get("username", "").strip().lower()
+    password = data.get("password", "")
+    role = data.get("role", "teacher").strip().lower()
+
+    if not username or len(password) < 6:
+        return jsonify({"success": False, "error": "Username required and password must be >= 6 characters."})
+
+    existing = get_system_user(username)
+    if existing:
+        return jsonify({"success": False, "error": f"Username '{username}' already exists."})
+
+    password_hash = generate_password_hash(password)
+    create_system_user(username, password_hash, role=role)
+
+    actor = session['user']['username']
+    log_audit(actor, "CREATE_FACULTY", f"Created {role} account: '{username}'.")
+    return jsonify({"success": True, "message": f"{role.capitalize()} '{username}' created successfully."})
+
+@app.route('/api/audit_logs')
+@role_required(['admin'])
+def api_audit_logs():
+    logs = get_audit_logs(limit=150)
+    return jsonify({"audit_logs": logs})
 
 if __name__ == '__main__':
     print("=" * 60)

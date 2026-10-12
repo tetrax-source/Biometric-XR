@@ -48,4 +48,22 @@ This document tracks all changes made during the system upgrade. Each phase reco
   - Run `python -c "import core.verification_service, secure_verify, app_web, app_gui"` to ensure unified service functions seamlessly across all environments.
   - Ensure CLI pipeline no longer references `trainer.yml` or `face_verify.py`.
 
+## Phase 4: Role-Based Access Control, Authentication, and Audit Trail
+- **Status**: DONE
+- **Files Changed**:
+  - `create_admin.py`: Created interactive CLI tool to securely create or update administrator credentials without hardcoded passwords.
+  - `templates/login.html`: Created dedicated faculty/admin login page with Bootstrap 5 Dark theme and CSRF validation.
+  - `templates/index.html`: Updated UI to distinguish public Kiosk mode from authenticated Teacher/Admin portal, adding faculty management and audit log views.
+  - `app_web.py`:
+    - Added `@login_required` and `@role_required` decorators protecting sensitive endpoints (`/api/enroll`, `/api/delete_user`, `/api/export_csv`, `/api/logs`, `/api/teachers`, `/api/create_teacher`, `/api/audit_logs`).
+    - Added CSRF token validation on mutating actions (`verify_csrf()`).
+    - Added 30-minute inactivity session expiration in `@app.before_request`.
+    - Integrated audit logging (`log_audit`) tracking every login, logout, enrollment, user deletion, teacher creation, and report export.
+    - Preserved public attendance check-in as open "Kiosk mode" on `/`.
+- **What to Test**:
+  - Unauthenticated access to `/api/logs` returns `401 Unauthorized`.
+  - Unauthenticated access to `/` serves Kiosk check-in mode.
+  - Successful login as admin unlocks student enrollment, log viewing, faculty management, and audit trail tabs.
+  - Verified CSRF protection on forms and API mutations.
+
 ---

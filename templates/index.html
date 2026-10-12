@@ -45,15 +45,40 @@
     </style>
 </head>
 <body>
+<script>
+    window.CSRF_TOKEN = "{{ csrf_token }}";
+</script>
+
 <nav class="navbar navbar-expand-lg border-bottom border-secondary mb-4" style="background-color: #1e293b;">
     <div class="container-fluid px-4">
-        <a class="navbar-brand fw-bold text-primary" href="#">
-            <i class="fa-solid fa-shield-halved me-2"></i>BIO-SECURE <span class="badge bg-secondary ms-1 fs-6">Web Portal</span>
+        <a class="navbar-brand fw-bold text-primary" href="/">
+            <i class="fa-solid fa-shield-halved me-2"></i>BIO-SECURE 
+            {% if current_user %}
+            <span class="badge bg-primary ms-1 fs-6">{{ current_user.role|capitalize }} Portal</span>
+            {% else %}
+            <span class="badge bg-secondary ms-1 fs-6">Kiosk Mode</span>
+            {% endif %}
         </a>
         <div class="d-flex align-items-center">
             <span class="text-secondary small me-3" id="clockText"></span>
+            
+            {% if current_user %}
+            <div class="dropdown me-2">
+                <button class="btn btn-outline-light btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                    <i class="fa-solid fa-user-circle me-1"></i>{{ current_user.username }} ({{ current_user.role|capitalize }})
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end dropdown-menu-dark">
+                    <li><a class="dropdown-item text-danger" href="/logout"><i class="fa-solid fa-right-from-bracket me-2"></i>Sign Out</a></li>
+                </ul>
+            </div>
+            {% else %}
+            <a href="/login" class="btn btn-primary btn-sm me-2">
+                <i class="fa-solid fa-lock me-1"></i>Faculty / Admin Login
+            </a>
+            {% endif %}
+
             <span class="badge bg-success-subtle text-success border border-success px-3 py-2">
-                <i class="fa-solid fa-circle-dot me-1"></i> System Online
+                <i class="fa-solid fa-circle-dot me-1"></i> Online
             </span>
         </div>
     </div>
@@ -64,23 +89,37 @@
     <ul class="nav nav-pills mb-4" id="pills-tab" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active px-4" id="tab-verify-btn" data-bs-toggle="pill" data-bs-target="#tab-verify" type="button">
-                <i class="fa-solid fa-camera me-2"></i>Live Verification
+                <i class="fa-solid fa-camera me-2"></i>Attendance Kiosk
             </button>
         </li>
+        {% if current_user %}
         <li class="nav-item" role="presentation">
-            <button class="nav-link px-4" id="tab-enroll-btn" data-bs-toggle="pill" data-bs-target="#tab-enroll" type="button">
-                <i class="fa-solid fa-user-plus me-2"></i>Enroll New User
+            <button class="nav-link px-4" id="tab-enroll-btn" data-bs-toggle="pill" data-bs-target="#tab-enroll" type="button" onclick="loadUsers()">
+                <i class="fa-solid fa-user-plus me-2"></i>Enroll Student
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link px-4" id="tab-logs-btn" data-bs-toggle="pill" data-bs-target="#tab-logs" type="button" onclick="loadLogs()">
-                <i class="fa-solid fa-clipboard-list me-2"></i>Attendance Logs
+                <i class="fa-solid fa-clipboard-list me-2"></i>Attendance Records
             </button>
         </li>
+        {% if current_user.role == 'admin' %}
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4" id="tab-admin-btn" data-bs-toggle="pill" data-bs-target="#tab-admin" type="button" onclick="loadTeachers()">
+                <i class="fa-solid fa-user-shield me-2"></i>Faculty Management
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link px-4" id="tab-audit-btn" data-bs-toggle="pill" data-bs-target="#tab-audit" type="button" onclick="loadAuditLogs()">
+                <i class="fa-solid fa-clock-rotate-left me-2"></i>Audit Logs
+            </button>
+        </li>
+        {% endif %}
+        {% endif %}
     </ul>
 
     <div class="tab-content" id="pills-tabContent">
-        <!-- TAB 1: LIVE VERIFICATION -->
+        <!-- TAB 1: KIOSK LIVE VERIFICATION (PUBLIC) -->
         <div class="tab-pane fade show active" id="tab-verify" role="tabpanel">
             <div class="row g-4">
                 <!-- Video Monitor Column -->
@@ -94,7 +133,7 @@
                         </div>
                         <img src="/video_feed" class="video-box mx-auto my-2" alt="Webcam Stream" onerror="this.src='data:image/svg+xml,<svg xmlns=\'http://www.w3.org/2000/svg\' width=\'640\' height=\'480\'><rect width=\'640\' height=\'480\' fill=\'%23111\'/><text x=\'50%25\' y=\'50%25\' fill=\'white\' font-size=\'20\' text-anchor=\'middle\'>Camera Initializing...</text></svg>'">
                         <div class="text-secondary small mt-2">
-                            <i class="fa-solid fa-info-circle me-1"></i> Look into the camera and blink naturally to start verification.
+                            <i class="fa-solid fa-info-circle me-1"></i> Stand in front of camera, blink naturally to activate verification.
                         </div>
                     </div>
                 </div>
@@ -103,7 +142,7 @@
                 <div class="col-lg-5">
                     <div class="card p-4 shadow-sm h-100">
                         <h5 class="fw-bold mb-3 border-bottom pb-2">
-                            <i class="fa-solid fa-list-check text-info me-2"></i>Authentication Pipeline
+                            <i class="fa-solid fa-list-check text-info me-2"></i>Multi-Modal Verification
                         </h5>
 
                         <!-- Step 1: Liveness -->
@@ -130,11 +169,11 @@
 
                         <!-- Step 3: Voice Verification -->
                         <div class="card mb-3 p-3 bg-dark border-secondary">
-                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Voice Challenge</div>
+                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Voice Verification</div>
                             <div class="text-secondary small mb-2" id="voiceStatus">Locked (Requires Step 2)</div>
                             <div id="voiceSection" class="d-none">
                                 <div class="mb-2">
-                                    <span class="text-muted small">Speak this code:</span><br>
+                                    <span class="text-muted small">Speak this verification code:</span><br>
                                     <span class="challenge-code" id="challengeCode">----</span>
                                 </div>
                                 <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
@@ -152,36 +191,57 @@
             </div>
         </div>
 
-        <!-- TAB 2: ENROLLMENT -->
+        {% if current_user %}
+        <!-- TAB 2: STUDENT ENROLLMENT (TEACHER & ADMIN ONLY) -->
         <div class="tab-pane fade" id="tab-enroll" role="tabpanel">
-            <div class="row justify-content-center">
-                <div class="col-md-6">
+            <div class="row g-4">
+                <div class="col-lg-6">
                     <div class="card p-4 shadow-sm">
-                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-plus text-primary me-2"></i>Enroll New Individual</h5>
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-plus text-primary me-2"></i>Enroll New Student</h5>
                         <p class="text-secondary small">
-                            Position yourself in front of the camera, enter your name, and click Enroll. The system will automatically capture 5 face embeddings and 1 voice sample.
+                            Position the student in front of the camera, enter their name, and click Enroll. The system captures 5 FaceNet embeddings and an acoustic voice profile.
                         </p>
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Full Name / ID</label>
+                            <label class="form-label fw-semibold">Student Name / Roll ID</label>
                             <input type="text" class="form-control form-control-lg bg-dark text-white border-secondary" id="enrollName" placeholder="e.g. ASWIN">
                         </div>
                         <button class="btn btn-success btn-lg w-100 fw-bold" id="btnEnroll" onclick="enrollUser()">
-                            <i class="fa-solid fa-cloud-arrow-up me-2"></i>Start Enrollment
+                            <i class="fa-solid fa-cloud-arrow-up me-2"></i>Capture & Save Enrollment
                         </button>
                         <div class="alert alert-info mt-3 d-none text-center" id="enrollAlert"></div>
+                    </div>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-users text-info me-2"></i>Enrolled Students</h5>
+                        <div class="table-responsive" style="max-height: 380px;">
+                            <table class="table table-dark table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>Name</th>
+                                        <th>Enrolled Date</th>
+                                        <th>Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="enrolledUsersBody">
+                                    <tr><td colspan="3" class="text-center text-muted">Loading enrolled users...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- TAB 3: ATTENDANCE LOGS -->
+        <!-- TAB 3: ATTENDANCE RECORDS (TEACHER & ADMIN ONLY) -->
         <div class="tab-pane fade" id="tab-logs" role="tabpanel">
             <div class="card p-4 shadow-sm">
                 <div class="d-flex justify-content-between align-items-center mb-3">
-                    <h5 class="fw-bold m-0"><i class="fa-solid fa-table text-info me-2"></i>Today's Attendance Records</h5>
+                    <h5 class="fw-bold m-0"><i class="fa-solid fa-table text-info me-2"></i>Attendance Records</h5>
                     <div>
                         <a href="/api/export_csv" class="btn btn-outline-success me-2">
-                            <i class="fa-solid fa-file-csv me-1"></i>Download CSV
+                            <i class="fa-solid fa-file-csv me-1"></i>Download CSV Report
                         </a>
                         <button class="btn btn-outline-primary" onclick="loadLogs()">
                             <i class="fa-solid fa-rotate me-1"></i>Refresh
@@ -195,7 +255,7 @@
                                 <th>Name</th>
                                 <th>Date</th>
                                 <th>Time</th>
-                                <th>Method</th>
+                                <th>Verification Method</th>
                                 <th>Face Conf</th>
                                 <th>Voice Sim</th>
                                 <th>Status</th>
@@ -208,6 +268,87 @@
                 </div>
             </div>
         </div>
+
+        {% if current_user.role == 'admin' %}
+        <!-- TAB 4: FACULTY MANAGEMENT (ADMIN ONLY) -->
+        <div class="tab-pane fade" id="tab-admin" role="tabpanel">
+            <div class="row g-4">
+                <div class="col-md-5">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-user-tie text-warning me-2"></i>Create Faculty Account</h5>
+                        <div class="mb-3">
+                            <label class="form-label small">Username</label>
+                            <input type="text" class="form-control bg-dark border-secondary text-white" id="teacherUsername" placeholder="e.g. teacher_maths">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">Password</label>
+                            <input type="password" class="form-control bg-dark border-secondary text-white" id="teacherPassword" placeholder="Minimum 6 characters">
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small">Role</label>
+                            <select class="form-select bg-dark border-secondary text-white" id="teacherRole">
+                                <option value="teacher" selected>Teacher</option>
+                                <option value="admin">Administrator</option>
+                            </select>
+                        </div>
+                        <button class="btn btn-warning w-100 fw-semibold" onclick="createTeacher()">
+                            <i class="fa-solid fa-plus me-1"></i>Create Account
+                        </button>
+                        <div class="alert alert-info mt-3 d-none text-center" id="teacherAlert"></div>
+                    </div>
+                </div>
+
+                <div class="col-md-7">
+                    <div class="card p-4 shadow-sm">
+                        <h5 class="fw-bold mb-3"><i class="fa-solid fa-id-badge text-primary me-2"></i>System Faculty Accounts</h5>
+                        <div class="table-responsive">
+                            <table class="table table-dark table-hover align-middle">
+                                <thead>
+                                    <tr>
+                                        <th>ID</th>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Created Date</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="teachersTableBody">
+                                    <tr><td colspan="4" class="text-center text-muted">Loading accounts...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB 5: AUDIT LOGS (ADMIN ONLY) -->
+        <div class="tab-pane fade" id="tab-audit" role="tabpanel">
+            <div class="card p-4 shadow-sm">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="fw-bold m-0"><i class="fa-solid fa-shield-virus text-danger me-2"></i>Security Audit Trail</h5>
+                    <button class="btn btn-outline-primary btn-sm" onclick="loadAuditLogs()">
+                        <i class="fa-solid fa-rotate me-1"></i>Refresh Trail
+                    </button>
+                </div>
+                <div class="table-responsive" style="max-height: 480px;">
+                    <table class="table table-dark table-sm table-striped align-middle">
+                        <thead>
+                            <tr class="table-secondary text-dark">
+                                <th>Timestamp</th>
+                                <th>Actor</th>
+                                <th>Action</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="auditTableBody">
+                            <tr><td colspan="4" class="text-center py-3 text-muted">Loading audit events...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+        {% endif %}
     </div>
 </div>
 
@@ -220,7 +361,7 @@
     setInterval(updateClock, 1000);
     updateClock();
 
-    // Poll backend status
+    // Poll status from kiosk backend
     async function pollStatus() {
         try {
             const res = await fetch('/api/status');
@@ -323,7 +464,7 @@
         const btn = document.getElementById('btnEnroll');
         const alertBox = document.getElementById('enrollAlert');
         btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enrolling (Look at camera & speak)...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enrolling...';
         alertBox.classList.remove('d-none');
         alertBox.className = 'alert alert-info mt-3 text-center';
         alertBox.innerText = 'Capturing face images and recording voice sample...';
@@ -331,7 +472,10 @@
         try {
             const res = await fetch('/api/enroll', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.CSRF_TOKEN
+                },
                 body: JSON.stringify({ name: name })
             });
             const data = await res.json();
@@ -339,6 +483,7 @@
                 alertBox.className = 'alert alert-success mt-3 text-center';
                 alertBox.innerText = data.message;
                 nameInput.value = '';
+                loadUsers();
             } else {
                 alertBox.className = 'alert alert-danger mt-3 text-center';
                 alertBox.innerText = data.error;
@@ -348,12 +493,64 @@
             alertBox.innerText = 'Enrollment error: ' + e;
         } finally {
             btn.disabled = false;
-            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up me-2"></i>Start Enrollment';
+            btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up me-2"></i>Capture & Save Enrollment';
+        }
+    }
+
+    async function loadUsers() {
+        const tbody = document.getElementById('enrolledUsersBody');
+        if (!tbody) return;
+        try {
+            const res = await fetch('/api/users');
+            const data = await res.json();
+            tbody.innerHTML = '';
+            if (!data.users || data.users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No students enrolled yet.</td></tr>';
+                return;
+            }
+            data.users.forEach(u => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="fw-bold">${u.name}</td>
+                        <td class="text-secondary small">${u.created_at ? u.created_at.slice(0, 10) : 'N/A'}</td>
+                        <td>
+                            <button class="btn btn-outline-danger btn-sm" onclick="deleteStudent('${u.name}')">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="3" class="text-center text-danger">Failed to load users.</td></tr>';
+        }
+    }
+
+    async function deleteStudent(name) {
+        if (!confirm(`Are you sure you want to delete ${name}?`)) return;
+        try {
+            const res = await fetch('/api/delete_user', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.CSRF_TOKEN
+                },
+                body: JSON.stringify({ name: name })
+            });
+            const data = await res.json();
+            if (data.success) {
+                loadUsers();
+            } else {
+                alert(data.error || 'Failed to delete user.');
+            }
+        } catch (e) {
+            alert('Error deleting user: ' + e);
         }
     }
 
     async function loadLogs() {
         const tbody = document.getElementById('logsTableBody');
+        if (!tbody) return;
         try {
             const res = await fetch('/api/logs');
             const data = await res.json();
@@ -379,6 +576,100 @@
             });
         } catch (e) {
             tbody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Failed to load logs.</td></tr>';
+        }
+    }
+
+    async function loadTeachers() {
+        const tbody = document.getElementById('teachersTableBody');
+        if (!tbody) return;
+        try {
+            const res = await fetch('/api/teachers');
+            const data = await res.json();
+            tbody.innerHTML = '';
+            if (!data.users || data.users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted">No accounts registered.</td></tr>';
+                return;
+            }
+            data.users.forEach(t => {
+                const badgeColor = t.role === 'admin' ? 'bg-danger' : 'bg-warning text-dark';
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${t.id}</td>
+                        <td class="fw-bold">${t.username}</td>
+                        <td><span class="badge ${badgeColor}">${t.role.toUpperCase()}</span></td>
+                        <td class="text-secondary small">${t.created_at ? t.created_at.slice(0, 10) : 'N/A'}</td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Failed to load accounts.</td></tr>';
+        }
+    }
+
+    async function createTeacher() {
+        const uInput = document.getElementById('teacherUsername');
+        const pInput = document.getElementById('teacherPassword');
+        const rInput = document.getElementById('teacherRole');
+        const alertBox = document.getElementById('teacherAlert');
+
+        const username = uInput.value.trim();
+        const password = pInput.value;
+        const role = rInput.value;
+
+        if (!username || password.length < 6) {
+            alert('Username required and password must be >= 6 characters.');
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/create_teacher', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-Token': window.CSRF_TOKEN
+                },
+                body: JSON.stringify({ username, password, role })
+            });
+            const data = await res.json();
+            alertBox.classList.remove('d-none');
+            if (data.success) {
+                alertBox.className = 'alert alert-success mt-3 text-center';
+                alertBox.innerText = data.message;
+                uInput.value = '';
+                pInput.value = '';
+                loadTeachers();
+            } else {
+                alertBox.className = 'alert alert-danger mt-3 text-center';
+                alertBox.innerText = data.error;
+            }
+        } catch (e) {
+            alert('Error creating teacher: ' + e);
+        }
+    }
+
+    async function loadAuditLogs() {
+        const tbody = document.getElementById('auditTableBody');
+        if (!tbody) return;
+        try {
+            const res = await fetch('/api/audit_logs');
+            const data = await res.json();
+            tbody.innerHTML = '';
+            if (!data.audit_logs || data.audit_logs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-3 text-muted">No audit trail entries found.</td></tr>';
+                return;
+            }
+            data.audit_logs.forEach(a => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td class="text-secondary small font-monospace">${a.timestamp}</td>
+                        <td class="fw-bold">${a.username || 'System'}</td>
+                        <td><span class="badge bg-secondary">${a.action}</span></td>
+                        <td class="small">${a.details || ''}</td>
+                    </tr>
+                `;
+            });
+        } catch (e) {
+            tbody.innerHTML = '<tr><td colspan="4" class="text-center text-danger">Failed to load audit logs.</td></tr>';
         }
     }
 </script>
