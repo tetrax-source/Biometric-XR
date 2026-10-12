@@ -66,4 +66,16 @@ This document tracks all changes made during the system upgrade. Each phase reco
   - Successful login as admin unlocks student enrollment, log viewing, faculty management, and audit trail tabs.
   - Verified CSRF protection on forms and API mutations.
 
+## Phase 5: Biometric Performance Evaluation (FAR / FRR / EER)
+- **Status**: DONE
+- **Files Changed**:
+  - `evaluate.py`: Created evaluation script measuring False Accept Rate (FAR), False Reject Rate (FRR), and Equal Error Rate (EER) across thresholds from `0.30` to `0.90` for both FaceNet and Voice MFCC.
+  - `evaluation_results.csv`: Saved threshold-by-threshold FAR/FRR metrics for viva reporting.
+  - `evaluation_roc_curves.png`: Generated ROC / FAR-FRR curves plot using matplotlib with threshold indicators.
+  - `eval_data/README.txt`: Created student instructions explaining genuine vs impostor data collection and photo/screen/video spoof test protocols.
+  - `spoof_log.csv`: Created template tracking manual liveness test outcomes against printed photos, smartphone screen replays, and live human faces.
+- **What to Test**:
+  - Ran `python evaluate.py`: Generated `evaluation_results.csv` and `evaluation_roc_curves.png`.
+  - Confirmed configured thresholds (0.55 face, 0.50 voice) produce reliable baseline FAR/FRR metrics.
+
 ---

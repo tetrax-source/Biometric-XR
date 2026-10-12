@@ -1,0 +1,6 @@
+attempt_id,test_type,sample_source,blink_passed,spoof_detected,notes
+1,Static Photo,Printed Paper Photo (A4 Color),False,True,Static image has zero EAR variation; successfully blocked
+2,Static Photo,Smartphone Screen Selfie (OLED),False,True,Screen reflection detected and zero blink; successfully blocked
+3,Video Replay,Recorded Smartphone Video of User Blinking,True,False,Video contains 2D blink; fooled basic EAR blink counter (Future: Add 3D depth/texture check)
+4,Live Human,Enrolled Live Student In-Person,True,False,Natural blink passed in 1.4 seconds; verified
+5,Static Photo,Laptop Screen Photo Display,False,True,Zero eye closure detected; liveness timed out after 8s
