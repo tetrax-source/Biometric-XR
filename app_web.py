@@ -40,13 +40,16 @@ from core.database import (
 )
 from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
+from core.liveness import LivenessDetector
+from core.face_engine import FaceEngine
 from core.voice_engine import VoiceEngine
-from core.verification_service import finalize_attendance
+from core.verification_service import process_voice_challenge, finalize_attendance
 
 from config import (
     CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
     EAR_THRESHOLD, REQUIRED_BLINKS, SECRET_KEY,
-    SESSION_TIMEOUT_MINUTES
+    SESSION_TIMEOUT_MINUTES, CODE_LENGTH, CODE_EXPIRY_SECONDS,
+    MAX_CODE_ATTEMPTS, SPOKEN_CODE_CHECK, VOICE_MATCH_ENABLED
 )
 
 app = Flask(__name__)
@@ -55,6 +58,18 @@ app.config['PERMANENT_SESSION_LIFETIME'] = datetime.timedelta(minutes=SESSION_TI
 
 # Initialize DB & Biometric Engines
 init_db()
+
+# Security Check: Warn if default admin/admin123 credentials are still active
+try:
+    _admin_user = get_system_user("admin")
+    if _admin_user and check_password_hash(_admin_user.get("password_hash", ""), "admin123"):
+        print("\n" + "!" * 70)
+        print("[SECURITY WARNING] Default credentials 'admin'/'admin123' are active!")
+        print("Please run 'python create_admin.py' to set a strong custom password.")
+        print("!" * 70 + "\n")
+except Exception:
+    pass
+
 liveness_detector = LivenessDetector(ear_threshold=EAR_THRESHOLD, required_blinks=REQUIRED_BLINKS)
 face_engine = FaceEngine(threshold=FACE_THRESHOLD)
 voice_engine = VoiceEngine(threshold=VOICE_THRESHOLD)
@@ -64,16 +79,22 @@ camera_lock = threading.Lock()
 camera = None
 enrolled_faces = get_all_face_embeddings()
 
+def generate_random_code(length=CODE_LENGTH):
+    import random
+    return "".join([str(random.randint(0, 9)) for _ in range(length)])
+
 state = {
-    "step": 1,                     # 1: Liveness, 2: Face, 3: Voice, 4: Attendance Logged
+    "step": 1,                     # 1: Liveness, 2: Face, 3: Spoken Challenge, 4: Logged
     "liveness_passed": False,
     "blink_count": 0,
     "ear": 0.0,
-    "user_name": None,
+    "user_name": None,             # Kept internal; not exposed to public kiosk
     "face_conf": 0.0,
-    "voice_score": 0.0,
-    "voice_status": "Waiting for face identification...",
-    "challenge_code": "",
+    "challenge_code": "",          # Current random 4-digit code
+    "code_created_at": 0.0,
+    "code_attempts": 0,
+    "max_attempts": MAX_CODE_ATTEMPTS,
+    "heard_digits": "",
     "result_message": "System Ready - Look into camera and blink to begin",
     "is_recording": False
 }
@@ -93,9 +114,10 @@ def reset_state():
     state["ear"] = 0.0
     state["user_name"] = None
     state["face_conf"] = 0.0
-    state["voice_score"] = 0.0
-    state["voice_status"] = "Waiting for face identification..."
     state["challenge_code"] = ""
+    state["code_created_at"] = 0.0
+    state["code_attempts"] = 0
+    state["heard_digits"] = ""
     state["result_message"] = "Looking for natural blink..."
     state["is_recording"] = False
 
@@ -200,10 +222,11 @@ def generate_video_stream():
                 state["user_name"] = name
                 state["face_conf"] = round(sim * 100, 1)
                 state["step"] = 3
-                code = voice_engine.generate_challenge_code()
-                state["challenge_code"] = code
-                state["voice_status"] = f"Face identified as {name}. Speak prompt into microphone for voice biometric matching."
-                state["result_message"] = f"Face recognized ({state['face_conf']}%). Complete voice verification."
+                state["challenge_code"] = generate_random_code()
+                state["code_created_at"] = time.time()
+                state["code_attempts"] = 0
+                state["heard_digits"] = ""
+                state["result_message"] = "Face identified. Speak the 4-digit code shown below."
             elif name == "Unknown":
                 state["result_message"] = "Face not recognized in database."
 
@@ -264,7 +287,19 @@ def video_feed():
 
 @app.route('/api/status')
 def api_status():
-    return jsonify(state)
+    """Returns kiosk status without exposing sensitive user list or logs."""
+    return jsonify({
+        "step": state["step"],
+        "liveness_passed": state["liveness_passed"],
+        "blink_count": state["blink_count"],
+        "ear": state["ear"],
+        "challenge_code": state["challenge_code"],
+        "heard_digits": state["heard_digits"],
+        "code_attempts": state["code_attempts"],
+        "max_attempts": state["max_attempts"],
+        "result_message": state["result_message"],
+        "is_recording": state["is_recording"]
+    })
 
 @app.route('/api/reset', methods=['POST'])
 def api_reset():
@@ -278,6 +313,13 @@ def api_verify_voice():
 
     if state["is_recording"]:
         return jsonify({"success": False, "error": "Already recording audio."})
+
+    # Code expiration check
+    if state["code_created_at"] > 0 and (time.time() - state["code_created_at"]) > CODE_EXPIRY_SECONDS:
+        msg = f"Challenge code expired ({CODE_EXPIRY_SECONDS}s). Restarting verification."
+        reset_state()
+        state["result_message"] = msg
+        return jsonify({"success": False, "message": msg, "restart": True})
 
     state["is_recording"] = True
     user = state["user_name"]
@@ -302,37 +344,48 @@ def api_verify_voice():
         if audio is None:
             audio = voice_engine.record_audio(duration=3.0)
 
-        is_audible, rms = voice_engine.check_audio_energy(audio)
-        if not is_audible:
-            state["is_recording"] = False
-            state["voice_status"] = "Voice too quiet. Please speak louder into the microphone."
-            return jsonify({"success": False, "error": "Low audio energy. Please speak louder."})
-
-        query_mfcc = voice_engine.extract_mfcc_embedding(audio)
-        stored_voice = get_voice_embedding(user)
-
-        if stored_voice is None:
-            passed, score = True, 1.0
-        else:
-            passed, score = voice_engine.verify(query_mfcc, stored_voice)
+        state["code_attempts"] += 1
+        res = process_voice_challenge(
+            user_name=user,
+            face_conf=state["face_conf"] / 100.0,
+            audio=audio,
+            expected_code=state["challenge_code"],
+            method="Face + Spoken Code + Liveness (Web Kiosk)"
+        )
 
         state["is_recording"] = False
-        state["voice_score"] = round(score * 100, 1)
+        state["heard_digits"] = res.heard_digits
 
-        if passed:
+        if res.success:
             state["step"] = 4
-            state["voice_status"] = f"Voice verified ({state['voice_score']}% match)!"
-            logged, log_msg = finalize_attendance(
-                user,
-                face_conf=state["face_conf"] / 100.0,
-                voice_sim=score,
-                method="Face + Voice + Liveness (Web)"
-            )
-            state["result_message"] = log_msg
-            return jsonify({"success": True, "logged": logged, "message": log_msg, "score": state["voice_score"]})
+            state["result_message"] = res.message
+            return jsonify({
+                "success": True,
+                "message": res.message,
+                "heard": res.heard_digits
+            })
         else:
-            state["voice_status"] = f"Voice mismatch ({state['voice_score']}%). Please try again."
-            return jsonify({"success": False, "message": "Voice verification failed. Try again.", "score": state["voice_score"]})
+            if state["code_attempts"] >= MAX_CODE_ATTEMPTS:
+                msg = f"{res.message}. Exceeded {MAX_CODE_ATTEMPTS} attempts. Restarting from Step 1."
+                reset_state()
+                state["result_message"] = msg
+                return jsonify({
+                    "success": False,
+                    "message": msg,
+                    "restart": True,
+                    "heard": res.heard_digits
+                })
+            else:
+                # Single-use code rule: generate a fresh random code for next attempt
+                state["challenge_code"] = generate_random_code()
+                state["code_created_at"] = time.time()
+                state["result_message"] = f"{res.message}. New code issued (Attempt {state['code_attempts']}/{MAX_CODE_ATTEMPTS})."
+                return jsonify({
+                    "success": False,
+                    "message": state["result_message"],
+                    "heard": res.heard_digits,
+                    "new_code": state["challenge_code"]
+                })
 
     except Exception as e:
         state["is_recording"] = False

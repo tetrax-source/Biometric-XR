@@ -6,7 +6,12 @@ A production-grade, multi-modal biometric attendance and access control system i
 
 ## 🌟 Key Highlights
 
-- **Triple-Factor Verification**: Liveness (Blink) $\rightarrow$ Face Recognition (FaceNet) $\rightarrow$ Voice Acoustics (MFCC).
+- **Triple-Factor Anti-Spoofing Pipeline**:
+  1. **Liveness Detection**: MediaPipe Eye Aspect Ratio (EAR) blink detection verifies a live human is present.
+  2. **Face Recognition**: DeepFace FaceNet (128-d deep neural embeddings) identifies **WHO** the user is.
+  3. **Spoken 4-Digit Challenge**: Offline Vosk Automatic Speech Recognition (ASR) with restricted digit grammar verifies the user is present **RIGHT NOW** and vocalizing the dynamic challenge.
+- **Face-Only Enrollment**: Students enroll using only 5 quick facial snapshots. No voice recording required at enrollment.
+- **Privacy-Preserving Public Kiosk**: The public verification screen displays only the random challenge code, the digits the system heard, and the pass/fail outcome. No names, student lists, or logs are exposed on the kiosk.
 - **Role-Based Access Control (RBAC)**:
   - **Public Kiosk Mode**: Open student check-in without exposing administrative controls or records.
   - **Faculty Portal**: Password-protected dashboard for teachers to enroll students, view attendance logs, and export CSV reports.
@@ -16,6 +21,7 @@ A production-grade, multi-modal biometric attendance and access control system i
   - Salted cryptographic password hashing via `werkzeug.security`.
   - 30-minute inactivity session expiration and CSRF protection on mutating actions.
   - Relational database foreign keys (`PRAGMA foreign_keys = ON;`) and composite indexing.
+  - Audit log tracking every login, enrollment, challenge attempt, and export.
 - **Multiple Operational Interfaces**:
   - **Modern Web Portal** (Flask, Bootstrap 5 Dark Theme, MJPEG stream, client-side Web Audio capture).
   - **Desktop GUI** (CustomTkinter, multi-tab workstation dashboard).
@@ -27,7 +33,7 @@ A production-grade, multi-modal biometric attendance and access control system i
 
 ```
 E:\Aswin\
-├── config.py                       # Centralized configuration (thresholds, DB path, camera index)
+├── config.py                       # Centralized configuration (thresholds, DB path, speech flags)
 ├── create_admin.py                 # Interactive CLI tool to create faculty/admin accounts
 ├── evaluate.py                     # Biometric evaluation script (FAR / FRR / EER / ROC curve)
 ├── main.py                         # Unified master entry point (--web, --cli, or default GUI)
@@ -38,7 +44,7 @@ E:\Aswin\
 ├── attendance_system.db            # SQLite relational database (users, embeddings, logs, audit)
 ├── requirements.txt                # Python package dependency manifest
 ├── PROGRESS.md                     # Full upgrade log tracking all development phases
-├── VIVA_NOTES.md                   # Architecture overview & Top 10 viva questions/answers
+├── VIVA_NOTES.md                   # Architecture overview & Top 15 viva questions/answers
 ├── SECURITY_NOTES.md               # In-depth security analysis & DPDP Act compliance review
 ├── FUTURE_SCOPE.md                 # Institutional roadmap & enterprise scale features
 │
@@ -48,25 +54,23 @@ E:\Aswin\
 │   ├── liveness.py                 # MediaPipe 1.x Tasks API Eye Aspect Ratio (EAR) detector
 │   ├── migration.py                # Legacy flat-file data migrator to SQLite
 │   ├── verification_service.py     # Single source of truth multi-modal decision service
-│   └── voice_engine.py             # 20-band MFCC acoustic feature extractor and matcher
+│   └── voice_engine.py             # Vosk offline digit challenge ASR & optional MFCC matcher
+│
+├── models/                         # Speech recognition offline models
+│   └── vosk-model-small-en-us-0.15/# Lightweight offline English acoustic model (~40 MB)
 │
 ├── data/                           # Neural network weights and cascades
 │   ├── face_landmarker.task        # MediaPipe 1.x FaceLandmarker model bundle
 │   ├── haarcascade_frontalface_default.xml # OpenCV frontal face detector
 │   └── haarcascade_eye.xml         # OpenCV eye detector (fallback)
 │
-├── eval_data/                      # Biometric benchmark evaluation samples
-│   ├── README.txt                  # Instructions for gathering genuine/impostor/spoof samples
-│   ├── genuine/                    # Enrolled student test samples
-│   └── impostor/                   # Unauthorized test samples
-│
 ├── templates/                      # Flask HTML templates
-│   ├── index.html                  # Bootstrap 5 dark web dashboard & kiosk interface
+│   ├── index.html                  # Bootstrap 5 dark web dashboard & privacy-preserving kiosk
 │   └── login.html                  # Secure faculty & administrator login portal
 │
-├── tests/                          # Automated pytest test suite (17 tests)
+├── tests/                          # Automated pytest test suite (21 tests)
 │   ├── test_auth_routes.py         # Flask RBAC, session timeout, and CSRF tests
-│   ├── test_biometrics.py          # Cosine similarity and EAR geometric calculation tests
+│   ├── test_biometrics.py          # Vosk digit parsing, challenge sessions, and biometrics
 │   └── test_database.py            # SQLite schema, duplicate rule, and serialization tests
 │
 └── archive/                        # Preserved legacy scripts and prototypes

@@ -6,28 +6,31 @@ A complete guide to the architecture, pipeline, and the 10 most common external 
 
 ## 1. System Architecture & Pipeline Overview
 
-Our project is a **Multi-Modal Biometric Attendance & Access System** combining three layers of identity verification:
+Our project is a **Multi-Modal Anti-Spoofing Biometric Attendance System** structured in three distinct stages:
 
 ```
 [ User in front of camera ]
             │
             ▼
 1. Liveness Detection      --> MediaPipe FaceLandmarker tracks 6 eye landmarks.
-   (Anti-Spoofing)             Calculates Eye Aspect Ratio (EAR). Rejects static photos.
+   (Blink Anti-Spoofing)       Calculates Eye Aspect Ratio (EAR). Rejects static photos.
             │ (Pass: Blink detected)
             ▼
 2. Face Recognition        --> OpenCV detects face bounding box.
    (Identity Matching)         DeepFace FaceNet extracts 128-d neural embedding vector.
                                Cosine Similarity >= 0.55 matches against SQLite profiles.
+                               Answers: "WHO is this person?"
             │ (Pass: Face identified)
             ▼
-3. Voice Verification      --> Records 3s audio at 16 kHz. Checks energy RMS >= 0.005.
-   (Acoustic Confirmation)     Librosa extracts 20 mean MFCC acoustic features.
-                               Cosine Similarity >= 0.50 confirms speaker identity.
-            │ (Pass: Voice verified)
+3. Spoken Code Challenge   --> Server generates a dynamic single-use 4-digit code (valid 60s).
+   (Liveness & Presence)       Microphone captures speech. Offline Vosk ASR with restricted digit
+                               grammar ("zero".."nine", "oh") transcribes words to numbers.
+                               Passes ONLY if spoken digits match expected challenge in order.
+                               Answers: "Is the person present and responsive RIGHT NOW?"
+            │ (Pass: Code matches)
             ▼
-4. Database Attendance     --> SQLite checks if attendance already recorded today.
-                               If new: logs user, date, time, confidence scores.
+4. Database Attendance     --> SQLite records attendance with daily duplicate prevention.
+                               Logs spoken_code_ok (1) and heard_digits into attendance_logs & audit_log.
 ```
 
 ---
@@ -105,5 +108,40 @@ If a record exists for today, the function immediately returns `False` and a sta
 ### Q10: What are the main future improvements for this project?
 **Answer**:
 1. **Hardware anti-spoofing**: Adding 3D depth cameras or active head pose challenges (e.g. "turn head left") to prevent prerecorded video playback attacks.
-2. **Speech-to-text challenge verification**: Integrating offline Vosk or Whisper to confirm that the student vocalized the exact 4-digit challenge code displayed on screen.
-3. **Cloud scaling**: Migrating SQLite to PostgreSQL to support hundreds of classroom kiosks running across a campus network.
+2. **Cloud scaling**: Migrating SQLite to PostgreSQL to support hundreds of classroom kiosks running across a campus network.
+3. **Mobile notification**: Push alerts or WhatsApp integration for parents when attendance is logged or missed.
+
+---
+
+### Q11: Why is the spoken challenge code random and single-use?
+**Answer**: A static spoken password (such as saying "present" or a fixed student roll number) is vulnerable to an audio replay attack: an attacker could secretly record the student saying that word and play it through a smartphone speaker. By generating a **cryptographically dynamic, single-use 4-digit code** with a 60-second expiration window and changing the code on every attempt, the attacker cannot predict what digits must be spoken. This guarantees interactive, real-time presence.
+
+---
+
+### Q12: Why did you eliminate voice recording during enrollment and keep enrollment face-only?
+**Answer**: In high-throughput institutional deployments (such as enrolling 500 college students):
+1. **Environmental Noise**: Acoustic enrollment in a busy college office captures background chatter and HVAC noise, corrupting the baseline voiceprint.
+2. **Speed & Ergonomics**: Face enrollment takes less than 3 seconds (5 instantaneous frames). Asking every student to read a voice passage is slow and causes bottlenecks.
+3. **Role of Voice**: We use speech recognition for **Liveness Verification** (proving the user is actively vocalizing the challenge) rather than biometric identification. Facial geometry reliably establishes **WHO** the person is; the random spoken challenge proves **THEY ARE PRESENT NOW**.
+
+---
+
+### Q13: How does your speech recognition engine work without an internet connection?
+**Answer**: We use **Vosk**, an open-source, offline speech recognition engine based on the Kaldi speech recognition toolkit. It runs entirely on the local CPU without sending audio to third-party cloud servers (such as Google Speech API). To maximize accuracy and minimize latency on low-resource machines, we restrict the recognition grammar strictly to digit tokens: `["zero", "oh", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "[unk]"]`. This constrains the language model's search space, yielding $>98\%$ digit recognition accuracy in real time.
+
+---
+
+### Q14: What happens if the speech model fails to load or the microphone is broken?
+**Answer**: The system applies defensive programming and graceful degradation:
+1. If the Vosk model directory is missing or fails to load, `core.voice_engine.get_vosk_model()` catches the error and returns `None` instead of crashing.
+2. The public kiosk warns the operator that the spoken code check is unavailable.
+3. If `SPOKEN_CODE_CHECK = False` in `config.py`, the system safely falls back to standard facial + blink verification without halting classroom attendance.
+
+---
+
+### Q15: What are the trade-offs of using speech recognition versus speaker verification?
+**Answer**:
+- **Speaker Verification (MFCC Matching)** checks *acoustic vocal tract timbre* (is this Aswin's vocal cord profile?). Trade-off: It requires high-quality microphone hardware, is sensitive to background noise and head colds, and requires clean enrolled audio.
+- **Speech Recognition (Spoken Code Challenge)** checks *semantic content* (did the speaker pronounce the random dynamic code on screen?). Trade-off: Anyone could vocalize the numbers, but when combined with FaceNet recognition and blink liveness, it guarantees that the identified student is actively standing there responding to the live challenge.
+- Our system supports both: speech recognition is active by default, and speaker verification can be enabled on demand with the `VOICE_MATCH_ENABLED = True` configuration flag.
+

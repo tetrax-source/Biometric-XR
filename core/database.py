@@ -86,12 +86,22 @@ def init_db():
         user_name TEXT NOT NULL,
         date TEXT NOT NULL,
         time TEXT NOT NULL,
-        verification_method TEXT DEFAULT 'Face + Voice + Liveness',
+        verification_method TEXT DEFAULT 'Face + Spoken Code + Liveness',
         face_confidence REAL,
         voice_similarity REAL,
+        spoken_code_ok INTEGER DEFAULT 1,
+        heard_digits TEXT DEFAULT '',
         status TEXT DEFAULT 'Present'
     );
     """)
+
+    # Safe ALTER TABLE migration for existing databases
+    cursor.execute("PRAGMA table_info(attendance_logs)")
+    existing_cols = [r["name"] for r in cursor.fetchall()]
+    if "spoken_code_ok" not in existing_cols:
+        cursor.execute("ALTER TABLE attendance_logs ADD COLUMN spoken_code_ok INTEGER DEFAULT 1")
+    if "heard_digits" not in existing_cols:
+        cursor.execute("ALTER TABLE attendance_logs ADD COLUMN heard_digits TEXT DEFAULT ''")
 
     # Index for fast duplicate checks and daily queries
     cursor.execute("""
@@ -205,7 +215,7 @@ def delete_user(user_name: str):
 
 # ----------------- ATTENDANCE LOGGING -----------------
 
-def record_attendance(user_name: str, method="Face + Voice + Liveness", face_conf=0.0, voice_sim=0.0):
+def record_attendance(user_name: str, method="Face + Spoken Code + Liveness", face_conf=0.0, voice_sim=0.0, spoken_code_ok=1, heard_digits=""):
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     now_time = datetime.datetime.now().strftime("%H:%M:%S")
 
@@ -219,9 +229,9 @@ def record_attendance(user_name: str, method="Face + Voice + Liveness", face_con
         return False, f"Attendance already logged for {user_name} today at {today}"
 
     cursor.execute("""
-        INSERT INTO attendance_logs (user_name, date, time, verification_method, face_confidence, voice_similarity, status)
-        VALUES (?, ?, ?, ?, ?, ?, 'Present')
-    """, (user_name, today, now_time, method, face_conf, voice_sim))
+        INSERT INTO attendance_logs (user_name, date, time, verification_method, face_confidence, voice_similarity, spoken_code_ok, heard_digits, status)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'Present')
+    """, (user_name, today, now_time, method, face_conf, voice_sim, spoken_code_ok, heard_digits))
     conn.commit()
     conn.close()
     return True, f"Attendance marked for {user_name} at {now_time}"
@@ -239,8 +249,9 @@ def get_attendance_logs(date=None):
 
 def export_attendance_to_csv(filepath: str, date=None):
     logs = get_attendance_logs(date)
+    cols = ["user_name", "date", "time", "verification_method", "face_confidence", "voice_similarity", "spoken_code_ok", "heard_digits", "status"]
     if not logs:
-        df = pd.DataFrame(columns=["user_name", "date", "time", "verification_method", "face_confidence", "voice_similarity", "status"])
+        df = pd.DataFrame(columns=cols)
     else:
         df = pd.DataFrame(logs)
         if "id" in df.columns:

@@ -33,12 +33,13 @@ from core.database import (
 )
 from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
-from core.voice_engine import VoiceEngine
+from core.voice_engine import VoiceEngine, ChallengeSession
 from core.migration import migrate_legacy_data
-from core.verification_service import finalize_attendance
+from core.verification_service import process_voice_challenge, finalize_attendance
 from config import (
     CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
-    EAR_THRESHOLD, REQUIRED_BLINKS
+    EAR_THRESHOLD, REQUIRED_BLINKS, CODE_LENGTH,
+    MAX_CODE_ATTEMPTS, CODE_EXPIRY_SECONDS
 )
 
 # Appearance
@@ -338,14 +339,14 @@ class BiometricAttendanceApp(ctk.CTk):
                         text=f"✔ Identified: {name} ({sim*100:.1f}%)",
                         text_color="#00e676"
                     )
-                    # Prepare voice prompt
-                    code = self.voice_engine.generate_challenge_code()
-                    self.current_challenge_code = code
+                    # Initialize single-use random 4-digit challenge session
+                    self.challenge_session = ChallengeSession(length=CODE_LENGTH)
+                    code_formatted = " - ".join(list(self.challenge_session.code))
                     self.lbl_voice_status.configure(
-                        text="Press 'Speak' & speak prompt for acoustic matching:",
+                        text=f"Speak 4-digit code (Attempt 1/{MAX_CODE_ATTEMPTS}):",
                         text_color="#ffb300"
                     )
-                    self.lbl_voice_prompt.configure(text=f"Speak:  \"{code}\"")
+                    self.lbl_voice_prompt.configure(text=f"Speak:  \"{code_formatted}\"")
                     self.btn_speak.configure(state="normal")
                 elif name == "Unknown":
                     self.lbl_face_status.configure(text="⚠ Face not recognized in database", text_color="#ff5252")
@@ -372,60 +373,56 @@ class BiometricAttendanceApp(ctk.CTk):
 
         def record_thread():
             try:
+                import random
                 audio = self.voice_engine.record_audio(duration=3.0)
-                is_audible, rms = self.voice_engine.check_audio_energy(audio)
-                if not is_audible:
-                    self.after(0, lambda: self.lbl_voice_status.configure(
-                        text="⚠ Voice too quiet. Speak louder!", text_color="#ff5252"
-                    ))
-                    self.after(0, lambda: self.btn_speak.configure(state="normal", text="🎙 Speak & Verify"))
-                    self.is_recording_voice = False
-                    return
+                if not hasattr(self, 'challenge_session') or self.challenge_session is None:
+                    self.challenge_session = ChallengeSession(length=CODE_LENGTH)
 
-                query_mfcc = self.voice_engine.extract_mfcc_embedding(audio)
-                stored_voice = get_voice_embedding(self.verified_user)
-
-                if stored_voice is None:
-                    # User doesn't have enrolled voice, accept with warning or mark
-                    passed, score = True, 1.0
-                else:
-                    passed, score = self.voice_engine.verify(query_mfcc, stored_voice)
+                self.challenge_session.record_attempt()
+                res = process_voice_challenge(
+                    user_name=self.verified_user,
+                    face_conf=self.verified_face_conf,
+                    audio=audio,
+                    expected_code=self.challenge_session.code,
+                    method="Desktop GUI (FaceNet + Spoken Code + Liveness)"
+                )
 
                 def on_done():
                     self.is_recording_voice = False
                     self.btn_speak.configure(text="🎙 Speak & Verify")
-                    if passed:
+                    if res.success:
+                        heard_fmt = " ".join(list(res.heard_digits)) if res.heard_digits else ""
                         self.lbl_voice_status.configure(
-                            text=f"✔ Voice Verified! Similarity: {score*100:.1f}%",
+                            text=f"✔ Code Verified! Heard: {heard_fmt}",
                             text_color="#00e676"
                         )
-                        # Record Attendance via unified verification service
-                        success, msg = finalize_attendance(
-                            self.verified_user,
-                            face_conf=self.verified_face_conf,
-                            voice_sim=score,
-                            method="Desktop GUI (FaceNet + Voice + Liveness)"
+                        self.result_banner.configure(
+                            text=f"✅ {res.message}", fg_color="#1b5e20"
                         )
-                        if success:
-                            self.result_banner.configure(
-                                text=f"✅ {msg}", fg_color="#1b5e20"
-                            )
-                        else:
-                            self.result_banner.configure(
-                                text=f"ℹ {msg}", fg_color="#f57f17"
-                            )
                         self.verification_step = 4
                     else:
-                        self.lbl_voice_status.configure(
-                            text=f"❌ Voice Rejected ({score*100:.1f}%). Try again.",
-                            text_color="#ff5252"
-                        )
-                        self.btn_speak.configure(state="normal")
+                        if not self.challenge_session.has_attempts_left() or self.challenge_session.is_expired():
+                            self.lbl_voice_status.configure(
+                                text=f"❌ {res.message}. Max attempts reached. Restarting.",
+                                text_color="#ff5252"
+                            )
+                            self.verification_step = 1
+                            self.liveness_detector.reset()
+                        else:
+                            # Generate new random code for next attempt
+                            self.challenge_session.code = "".join([str(random.randint(0, 9)) for _ in range(CODE_LENGTH)])
+                            new_code_fmt = " - ".join(list(self.challenge_session.code))
+                            self.lbl_voice_prompt.configure(text=f"Speak:  \"{new_code_fmt}\"")
+                            self.lbl_voice_status.configure(
+                                text=f"⚠ {res.message}. New code issued (Attempt {self.challenge_session.attempts+1}/{MAX_CODE_ATTEMPTS}).",
+                                text_color="#ffb300"
+                            )
+                            self.btn_speak.configure(state="normal")
 
                 self.after(0, on_done)
             except Exception as e:
-                self.after(0, lambda: messagebox.showerror("Audio Error", str(e)))
                 self.is_recording_voice = False
+                self.after(0, lambda err=e: messagebox.showerror("Audio Error", str(err)))
                 self.after(0, lambda: self.btn_speak.configure(state="normal", text="🎙 Speak & Verify"))
 
         threading.Thread(target=record_thread, daemon=True).start()

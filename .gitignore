@@ -1,0 +1,29 @@
+# Environment variables & secrets
+.env
+.env.*
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Databases & Backups
+*.db
+*.db.bak
+*.sqlite
+*.sqlite3
+
+# Audio & Image storage directories
+images/
+voice_db/
+voices/
+eval_data/
+
+# Machine learning model directories (large downloads)
+models/
+
+# OS metadata
+Thumbs.db
+Desktop.ini
+.DS_Store

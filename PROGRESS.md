@@ -156,4 +156,79 @@ This document tracks all changes made during the system upgrade. Each phase reco
 - **What to Test**:
   - Test enrolling a new user via web API or GUI; verify only face samples are captured and stored, with no prompt or requirement for voice.
 
+## Phase 3 (New Upgrade): Spoken Code Verification Engine
+- **Status**: DONE
+- **Files Changed**:
+  - `core/voice_engine.py`:
+    - Added `verify_spoken_code(audio, expected_code)` with restricted Kaldi digit grammar (`zero`, `oh`, `one`..`nine`, `[unk]`).
+    - Maps spoken `"oh"` and `"zero"` to `"0"`.
+    - Converts input audio to 16 kHz mono 16-bit signed PCM format.
+    - Added `ChallengeSession` for tracking code generation, timestamp expiration, and retry limits.
+    - Added singleton `get_vosk_model()` with graceful error recovery.
+  - `core/verification_service.py`:
+    - Updated `process_voice_challenge()` to run: (1) Audio energy check, (2) Vosk spoken digit recognition matching expected challenge code, (3) Optional MFCC matching if `VOICE_MATCH_ENABLED = True`, and (4) Idempotent database attendance finalization.
+- **What to Test**:
+  - Unit tested with digit grammar simulation ("four two nine one" -> "4291", "oh zero five three" -> "0053", wrong order "one two three four" -> failed).
+
+## Phase 4 (New Upgrade): Dynamic Random Code Challenge & Kiosk Privacy
+- **Status**: DONE
+- **Files Changed**:
+  - `app_web.py`:
+    - Generates dynamic 4-digit code upon successful FaceNet recognition.
+    - Enforces 60-second expiration (`CODE_EXPIRY_SECONDS`): resets to Step 1 if expired.
+    - Enforces maximum 3 attempts (`MAX_CODE_ATTEMPTS`): resets to Step 1 if exceeded.
+    - Generates a fresh random code on each failed attempt (single-use code rule).
+    - Anonymized `/api/status`: strips `user_name` and logs from public API payload.
+  - `templates/index.html`:
+    - Public Kiosk Step 3 displays exclusively: random 4-digit code challenge, digits heard, attempt counter, and pass/fail alert. Zero student names or log records are shown.
+  - `app_gui.py`:
+    - Updated Step 3 voice challenge card to show dynamic 4-digit prompt and attempt count.
+  - `secure_verify.py` (CLI):
+    - Uses interactive terminal challenge loop with `ChallengeSession` and automatic retry.
+- **What to Test**:
+  - Stand in front of camera, pass blink + face, observe random 4-digit challenge on screen.
+  - Speak digits and verify kiosk shows heard digits and success alert without displaying student list.
+
+## Phase 5 (New Upgrade): Database Schema Migration & Audit Logging
+- **Status**: DONE
+- **Files Changed**:
+  - `core/database.py`:
+    - Added safe automatic migration: checks `PRAGMA table_info(attendance_logs)` and executes `ALTER TABLE attendance_logs ADD COLUMN spoken_code_ok INTEGER DEFAULT 1;` and `ALTER TABLE attendance_logs ADD COLUMN heard_digits TEXT DEFAULT '';` if columns are missing.
+    - Updated `record_attendance()` to record `spoken_code_ok` and `heard_digits`.
+    - Updated `export_attendance_to_csv()` to include `Spoken_Code_OK` and `Heard_Digits` columns in generated reports.
+  - `core/verification_service.py`:
+    - Logs `SPOKEN_CODE_FAILED`, `SPEAKER_MATCH_FAILED`, and `ATTENDANCE_SUCCESS` events with spoken digit metadata to `audit_log`.
+- **What to Test**:
+  - Check `attendance_logs` schema to verify columns exist.
+  - Verify attendance records contain `spoken_code_ok` (1) and `heard_digits`.
+
+## Phase 6 (New Upgrade): Automated Test Suite Expansion
+- **Status**: DONE
+- **Files Changed**:
+  - `tests/test_biometrics.py`:
+    - Added `test_challenge_session_lifecycle`: tests single-use code creation, 60s expiration, and 3-attempt limit.
+    - Added `test_spoken_code_digit_grammar_parsing`: tests exact matches, "oh" as 0, wrong digit order, missing digits, extra digits, and silence.
+    - Added `test_spoken_code_disabled_flag`: tests graceful bypass when `SPOKEN_CODE_CHECK = False`.
+    - Added `test_face_only_enrollment_does_not_require_voice`: verifies enrollment stores face vectors without requiring voice.
+- **What to Test**:
+  - Ran `python -m pytest tests/ -v`: All 21 tests passed (100% success rate).
+
+## Phase 7 (New Upgrade): Security Housekeeping & .gitignore
+- **Status**: DONE
+- **Files Changed**:
+  - `.gitignore`: Created repository ignore file excluding database files (`*.db`, `*.db.bak`), neural weights (`models/`), audio caches (`voices/`, `voice_db/`), image caches (`images/`), test datasets (`eval_data/`), and environment files (`.env`).
+  - `app_web.py`: Added console startup check and prominent warning banner if the default administrator account credentials (`admin`/`admin123`) are still active, prompting execution of `python create_admin.py`.
+- **What to Test**:
+  - Check console startup output when starting server.
+  - Check `git status` to ensure binary databases and models are ignored.
+
+## Phase 8 (New Upgrade): Documentation & Viva Defense Preparation
+- **Status**: DONE
+- **Files Changed**:
+  - `README.md`: Updated architecture, pipeline diagrams, privacy kiosk details, and test instructions.
+  - `SECURITY_NOTES.md`: Documented anti-spoofing mechanism (face identifies WHO, blink + spoken code proves live presence NOW) and local microphone privacy guarantees.
+  - `VIVA_NOTES.md`: Added 5 detailed viva Q&A pairs (Q11-Q15) covering dynamic codes, face-only enrollment rationale, offline Vosk advantages, missing model fallback, and speech recognition vs speaker verification trade-offs.
+- **What to Test**:
+  - Review markdown documents for presentation clarity.
+
 ---

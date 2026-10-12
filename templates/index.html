@@ -167,17 +167,23 @@
                             </div>
                         </div>
 
-                        <!-- Step 3: Voice Verification -->
+                        <!-- Step 3: Spoken 4-Digit Challenge -->
                         <div class="card mb-3 p-3 bg-dark border-secondary">
-                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Voice Verification</div>
+                            <div class="fw-bold mb-1"><i class="fa-solid fa-microphone me-2 text-primary"></i>Step 3: Spoken 4-Digit Challenge</div>
                             <div class="text-secondary small mb-2" id="voiceStatus">Locked (Requires Step 2)</div>
                             <div id="voiceSection" class="d-none">
-                                <div class="mb-2">
-                                    <span class="text-muted small">Speak this prompt into microphone (MFCC acoustic matching):</span><br>
+                                <div class="mb-2 text-center">
+                                    <span class="text-muted small d-block mb-1">Speak this random 4-digit code:</span>
                                     <span class="challenge-code" id="challengeCode">----</span>
                                 </div>
+                                <div class="alert alert-dark border-secondary py-2 px-3 small text-center mb-2" id="heardBox">
+                                    <span>Digits Heard: </span><strong class="text-info fs-6" id="heardDigits">Waiting for voice...</strong>
+                                </div>
+                                <div class="text-center small text-secondary mb-2" id="attemptText">
+                                    Attempt 1 of 3 (Single-use, expires in 60s)
+                                </div>
                                 <button class="btn btn-primary w-100 py-2 fw-semibold" id="btnRecordVoice" onclick="recordVoice()">
-                                    <i class="fa-solid fa-microphone-lines me-2"></i>Record & Match Voice (3s)
+                                    <i class="fa-solid fa-microphone-lines me-2"></i>Speak Code (3s)
                                 </button>
                             </div>
                         </div>
@@ -382,10 +388,10 @@
             const badge2 = document.getElementById('badgeStep2');
             const faceText = document.getElementById('faceStatus');
             if (data.step >= 2) {
-                if (data.user_name) {
+                if (data.step >= 3) {
                     badge2.className = 'badge bg-success step-badge';
-                    badge2.innerText = 'Identified';
-                    faceText.innerText = `${data.user_name} (${data.face_conf}%)`;
+                    badge2.innerText = 'Matched';
+                    faceText.innerText = 'Face verified. Proceed to Step 3.';
                 } else {
                     badge2.className = 'badge bg-warning text-dark step-badge';
                     badge2.innerText = 'Scanning';
@@ -397,13 +403,15 @@
                 faceText.innerText = 'Locked (Requires Step 1)';
             }
 
-            // Step 3: Voice
+            // Step 3: Spoken Code
             const voiceSec = document.getElementById('voiceSection');
             const voiceText = document.getElementById('voiceStatus');
             if (data.step >= 3) {
                 voiceSec.classList.remove('d-none');
-                document.getElementById('challengeCode').innerText = data.challenge_code || '----';
-                voiceText.innerText = data.voice_status;
+                document.getElementById('challengeCode').innerText = data.challenge_code ? data.challenge_code.split('').join(' - ') : '----';
+                document.getElementById('heardDigits').innerText = data.heard_digits ? data.heard_digits.split('').join(' ') : 'Waiting for voice...';
+                document.getElementById('attemptText').innerText = `Attempt ${Math.min(data.code_attempts + 1, data.max_attempts)} of ${data.max_attempts} (Single-use, expires in 60s)`;
+                voiceText.innerText = 'Say the 4 digits clearly in order into the microphone.';
             } else {
                 voiceSec.classList.add('d-none');
                 voiceText.innerText = 'Locked (Requires Step 2)';

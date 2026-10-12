@@ -25,14 +25,21 @@ This document summarizes the security vulnerabilities addressed during the upgra
 - **Risk**: An attacker with direct physical or file system access to `attendance_system.db` can copy the embeddings. While deep embeddings cannot be directly converted back into human-recognizable photographs, facial feature reconstruction attacks (feature inversion) are theoretically possible.
 - **Production Recommendation**: Encrypt biometric blobs at rest using AES-256-GCM with keys managed in a hardware security module (HSM) or cloud key vault (e.g., AWS KMS, HashiCorp Vault), or explore Cancelable Biometrics / Fuzzy Commitments.
 
-### B. Video Replay Liveness Spoofing
-- **Current Status**: Liveness is determined by 2D Eye Aspect Ratio (EAR) tracking eye blinks.
-- **Risk**: While static printed photos and phone screen images are effectively rejected (because eyes do not close), an attacker playing back a prerecorded video of the genuine student blinking can fool a simple EAR counter.
-- **Production Recommendation**: Implement randomized interactive challenges (e.g. "turn head 30° left", "smile", "nod") or utilize active hardware depth cameras (Intel RealSense, Apple FaceID TrueDepth) to confirm 3D face curvature.
+### B. Video Replay & Synthetic Audio Liveness Spoofing
+- **Current Status**: Liveness is determined by 2D Eye Aspect Ratio (EAR) tracking eye blinks followed by a random, dynamic 4-digit spoken challenge code transcribed using offline Vosk ASR.
+- **Protection Achieved**: Static printed photos, tablet selfies, and prerecorded video loops fail because:
+  1. The user's eyes must transition from open to closed to open in real time.
+  2. The random 4-digit challenge cannot be known in advance by an attacker, defeating static prerecorded audio replay attacks.
+- **Production Recommendation**: Add active head-pose challenge prompts (e.g. "turn head left 30 degrees") or 3D structured light sensors (Intel RealSense, iPhone TrueDepth) to defend against sophisticated real-time 3D deepfake masks.
 
-### C. Privacy & Regulatory Compliance (DPDP Act 2023 / GDPR)
+### C. Audio Processing & Microphone Privacy
+- **Current Status**: Vosk processes speech locally on CPU in memory without transmitting audio across the network.
+- **Protection Achieved**: Raw audio buffers are discarded immediately after digit extraction; only the numeric heard string is logged to `attendance_logs` and `audit_log`.
+
+### D. Privacy & Regulatory Compliance (DPDP Act 2023 / GDPR)
 - **Legal Context**: Biometric data (facial geometry and acoustic templates) constitutes Sensitive Personal Data under the Digital Personal Data Protection (DPDP) Act 2023 (India) and GDPR Article 9 (EU).
 - **Required Safeguards**:
   1. **Consent Architecture**: Students must provide explicit, revocable digital or written consent before enrollment.
   2. **Right to Erasure**: The newly implemented `delete_user()` function supports GDPR "Right to be Forgotten" by deleting enrolled vectors.
   3. **Purpose Limitation**: Biometric signatures must strictly be utilized for attendance verification and never shared with third parties.
+
