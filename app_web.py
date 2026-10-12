@@ -27,6 +27,7 @@ from core.database import (
 from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
 from core.voice_engine import VoiceEngine
+from core.verification_service import finalize_attendance
 
 from config import (
     CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
@@ -191,11 +192,11 @@ def api_verify_voice():
         if passed:
             state["step"] = 4
             state["voice_status"] = f"Voice verified ({state['voice_score']}% match)!"
-            logged, log_msg = record_attendance(
+            logged, log_msg = finalize_attendance(
                 user,
-                method="Face + Voice + Liveness (Web)",
                 face_conf=state["face_conf"] / 100.0,
-                voice_sim=score
+                voice_sim=score,
+                method="Face + Voice + Liveness (Web)"
             )
             state["result_message"] = log_msg
             return jsonify({"success": True, "logged": logged, "message": log_msg, "score": state["voice_score"]})

@@ -33,4 +33,19 @@ This document tracks all changes made during the system upgrade. Each phase reco
   - Verified embedding shapes (`(128,) float32`, `(20,) float32`) and numerical equivalence (`Face diff: 0.0`, `Voice diff: 0.0`).
   - Checked `sqlite_master` to ensure tables `system_users`, `audit_log`, and index `idx_attendance_user_date` exist.
 
+## Phase 3: Unified CLI and Shared Decision Pipeline
+- **Status**: DONE
+- **Files Changed**:
+  - `core/verification_service.py`: Created shared verification service providing `finalize_attendance()` and `run_cli_verification()`. Enforces identical multi-modal rules across Desktop GUI, Web, and CLI:
+    1. Liveness (MediaPipe blink detection)
+    2. Face recognition (FaceNet deep embeddings, threshold `0.55`)
+    3. Voice verification (MFCC acoustic similarity, threshold `0.50`)
+    4. Attendance recording with daily duplicate check
+  - `secure_verify.py`: Updated to use `core.verification_service` (FaceNet + MFCC + Liveness) instead of legacy LBPH `face_verify.py`.
+  - `app_web.py`: Updated to call `finalize_attendance()` for shared decision logic.
+  - `app_gui.py`: Updated to call `finalize_attendance()` for shared decision logic.
+- **What to Test**:
+  - Run `python -c "import core.verification_service, secure_verify, app_web, app_gui"` to ensure unified service functions seamlessly across all environments.
+  - Ensure CLI pipeline no longer references `trainer.yml` or `face_verify.py`.
+
 ---

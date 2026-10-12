@@ -35,6 +35,7 @@ from core.liveness import LivenessDetector
 from core.face_engine import FaceEngine
 from core.voice_engine import VoiceEngine
 from core.migration import migrate_legacy_data
+from core.verification_service import finalize_attendance
 from config import (
     CAMERA_INDEX, FACE_THRESHOLD, VOICE_THRESHOLD,
     EAR_THRESHOLD, REQUIRED_BLINKS
@@ -398,12 +399,12 @@ class BiometricAttendanceApp(ctk.CTk):
                             text=f"✔ Voice Verified! Similarity: {score*100:.1f}%",
                             text_color="#00e676"
                         )
-                        # Record Attendance in DB
-                        success, msg = record_attendance(
+                        # Record Attendance via unified verification service
+                        success, msg = finalize_attendance(
                             self.verified_user,
-                            method="Face + Voice + Liveness",
                             face_conf=self.verified_face_conf,
-                            voice_sim=score
+                            voice_sim=score,
+                            method="Desktop GUI (FaceNet + Voice + Liveness)"
                         )
                         if success:
                             self.result_banner.configure(
